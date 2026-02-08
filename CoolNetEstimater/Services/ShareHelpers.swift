@@ -21,11 +21,16 @@ struct ActivityView: View {
     let activityItems: [Any]
     #if os(iOS)
     let applicationActivities: [UIActivity]? = nil
+    var onDismiss: (() -> Void)? = nil
     #endif
     
     #if os(iOS)
     private var uiView: some View {
-        ActivityView_iOS(activityItems: activityItems, applicationActivities: applicationActivities)
+        ActivityView_iOS(
+            activityItems: activityItems,
+            applicationActivities: applicationActivities,
+            onDismiss: onDismiss
+        )
     }
     #endif
     
@@ -39,22 +44,49 @@ struct ActivityView: View {
 }
 
 #if os(iOS)
+/// Presents UIActivityViewController. On iPad uses popover (required by system); calls onDismiss when done so the sheet can close.
 struct ActivityView_iOS: UIViewControllerRepresentable {
     let activityItems: [Any]
     let applicationActivities: [UIActivity]?
+    var onDismiss: (() -> Void)? = nil
     
-    init(activityItems: [Any], applicationActivities: [UIActivity]? = nil) {
-        self.activityItems = activityItems
-        self.applicationActivities = applicationActivities
+    func makeUIViewController(context: Context) -> ActivitySheetHostVC {
+        let host = ActivitySheetHostVC()
+        host.activityItems = activityItems
+        host.applicationActivities = applicationActivities
+        host.onDismiss = onDismiss
+        return host
     }
     
-    func makeUIViewController(context: Context) -> UIActivityViewController {
+    func updateUIViewController(_ uiViewController: ActivitySheetHostVC, context: Context) {
+        uiViewController.activityItems = activityItems
+        uiViewController.applicationActivities = applicationActivities
+        uiViewController.onDismiss = onDismiss
+    }
+}
+
+final class ActivitySheetHostVC: UIViewController {
+    var activityItems: [Any] = []
+    var applicationActivities: [UIActivity]?
+    var onDismiss: (() -> Void)?
+    private var didPresent = false
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guard !didPresent else { return }
+        didPresent = true
         let vc = UIActivityViewController(activityItems: activityItems, applicationActivities: applicationActivities)
         vc.excludedActivityTypes = []
-        return vc
+        if let pop = vc.popoverPresentationController {
+            pop.sourceView = view
+            pop.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
+            pop.permittedArrowDirections = []
+        }
+        vc.completionWithItemsHandler = { [weak self] _, _, _, _ in
+            self?.onDismiss?()
+        }
+        present(vc, animated: true)
     }
-    
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 #endif
 
@@ -85,6 +117,9 @@ struct MailComposerView: View {
     let recipients: [String]
     let messageBody: String
     let attachments: [(data: Data, mimeType: String, fileName: String)]
+    #if os(iOS)
+    var onDismiss: (() -> Void)? = nil
+    #endif
     
     #if os(iOS)
     private var uiView: some View {
@@ -92,7 +127,8 @@ struct MailComposerView: View {
             subject: subject,
             recipients: recipients,
             body: messageBody,
-            attachments: attachments
+            attachments: attachments,
+            onDismiss: onDismiss
         )
     }
     #endif
@@ -136,14 +172,22 @@ struct MailComposerView_iOS: UIViewControllerRepresentable {
     let recipients: [String]
     let body: String
     let attachments: [(data: Data, mimeType: String, fileName: String)]
+    var onDismiss: (() -> Void)? = nil
     
     final class Coordinator: NSObject, MFMailComposeViewControllerDelegate {
+        var onDismiss: (() -> Void)?
         func mailComposeController(_ controller: MFMailComposeViewController, didFinishWith result: MFMailComposeResult, error: Error?) {
-            controller.dismiss(animated: true)
+            controller.dismiss(animated: true) { [weak self] in
+                self?.onDismiss?()
+            }
         }
     }
     
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator {
+        let c = Coordinator()
+        c.onDismiss = onDismiss
+        return c
+    }
     
     func makeUIViewController(context: Context) -> MFMailComposeViewController {
         let vc = MFMailComposeViewController()
@@ -157,7 +201,9 @@ struct MailComposerView_iOS: UIViewControllerRepresentable {
         return vc
     }
     
-    func updateUIViewController(_ uiViewController: MFMailComposeViewController, context: Context) {}
+    func updateUIViewController(_ uiViewController: MFMailComposeViewController, context: Context) {
+        context.coordinator.onDismiss = onDismiss
+    }
 }
 #endif
 
@@ -165,13 +211,17 @@ struct MessageComposerView: View {
     let recipients: [String]
     let messageBody: String
     let attachments: [(data: Data, uti: String, fileName: String)]
+    #if os(iOS)
+    var onDismiss: (() -> Void)? = nil
+    #endif
     
     #if os(iOS)
     private var uiView: some View {
         MessageComposerView_iOS(
             recipients: recipients,
             body: messageBody,
-            attachments: attachments
+            attachments: attachments,
+            onDismiss: onDismiss
         )
     }
     #endif
@@ -211,14 +261,22 @@ struct MessageComposerView_iOS: UIViewControllerRepresentable {
     let recipients: [String]
     let body: String
     let attachments: [(data: Data, uti: String, fileName: String)]
+    var onDismiss: (() -> Void)? = nil
     
     final class Coordinator: NSObject, MFMessageComposeViewControllerDelegate {
+        var onDismiss: (() -> Void)?
         func messageComposeViewController(_ controller: MFMessageComposeViewController, didFinishWith result: MessageComposeResult) {
-            controller.dismiss(animated: true)
+            controller.dismiss(animated: true) { [weak self] in
+                self?.onDismiss?()
+            }
         }
     }
     
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator {
+        let c = Coordinator()
+        c.onDismiss = onDismiss
+        return c
+    }
     
     func makeUIViewController(context: Context) -> MFMessageComposeViewController {
         let vc = MFMessageComposeViewController()
@@ -231,7 +289,9 @@ struct MessageComposerView_iOS: UIViewControllerRepresentable {
         return vc
     }
     
-    func updateUIViewController(_ uiViewController: MFMessageComposeViewController, context: Context) {}
+    func updateUIViewController(_ uiViewController: MFMessageComposeViewController, context: Context) {
+        context.coordinator.onDismiss = onDismiss
+    }
 }
 #endif
 

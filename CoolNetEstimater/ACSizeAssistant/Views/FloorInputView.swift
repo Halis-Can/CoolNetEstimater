@@ -32,10 +32,7 @@ struct FloorInputView: View {
                             }
                             VStack(alignment: .leading) {
                                 Text("Square footage").font(.subheadline).foregroundStyle(.secondary)
-                                TextField("0", value: $floor.squareFootage, formatter: decimalFormatter)
-                                    .keyboardType(.decimalPad)
-                                    .textFieldStyle(.roundedBorder)
-                                    .frame(width: 120)
+                                SquareFootageField(value: $floor.squareFootage)
                             }
                             Spacer()
                             Button(role: .destructive) {
@@ -85,12 +82,75 @@ struct FloorInputView: View {
     }
 }
 
-private let decimalFormatter: NumberFormatter = {
-    let f = NumberFormatter()
-    f.numberStyle = .decimal
-    f.maximumFractionDigits = 2
-    return f
-}()
+/// Square footage alanı: sayıyı metin gibi girer/silersiniz; tıklanınca rahat değiştirilir, decimal pad + Done ile kapatma.
+private struct SquareFootageField: View {
+    @Binding var value: Double
+    @State private var text: String = ""
+    @FocusState private var isFocused: Bool
+    
+    var body: some View {
+        TextField("0", text: $text)
+            .keyboardType(.decimalPad)
+            .multilineTextAlignment(.trailing)
+            .focused($isFocused)
+            .onAppear { text = formatForDisplay(value) }
+            .onChange(of: value) { newValue in
+                if !isFocused { text = formatForDisplay(newValue) }
+            }
+            .onChange(of: text) { newText in
+                let parsed = parseSquareFootage(newText)
+                if let v = parsed, v != value { value = v }
+            }
+            .onSubmit { commitText() }
+            .onChange(of: isFocused) { focused in
+                if focused {
+                    if text == "0" || text.isEmpty { text = "" }
+                } else {
+                    commitText()
+                }
+            }
+            .frame(minWidth: 100, minHeight: 44)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color(UIColor.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isFocused ? Color.accentColor : Color(UIColor.separator), lineWidth: isFocused ? 2 : 1)
+            )
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        isFocused = false
+                        commitText()
+                    }
+                }
+            }
+    }
+    
+    private func commitText() {
+        let parsed = parseSquareFootage(text)
+        if let v = parsed {
+            value = v
+            text = formatForDisplay(v)
+        } else {
+            text = formatForDisplay(value)
+        }
+    }
+    
+    private func formatForDisplay(_ v: Double) -> String {
+        if v == 0 { return "" }
+        if v.truncatingRemainder(dividingBy: 1) == 0 { return "\(Int(v))" }
+        return String(format: "%.2f", v)
+    }
+    
+    private func parseSquareFootage(_ s: String) -> Double? {
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")
+        if t.isEmpty { return 0 }
+        return Double(t)
+    }
+}
 
 private struct Card<Content: View>: View {
     @ViewBuilder let content: () -> Content

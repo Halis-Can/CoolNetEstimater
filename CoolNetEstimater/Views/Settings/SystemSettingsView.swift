@@ -71,6 +71,11 @@ struct SystemSettingsView: View {
                     
                     Section {
                         NavigationLink {
+                            DocuSignSettingsView()
+                        } label: {
+                            Label("DocuSign", systemImage: "signature")
+                        }
+                        NavigationLink {
                             AppInformationView()
                         } label: {
                             Label("App Information", systemImage: "info.circle")

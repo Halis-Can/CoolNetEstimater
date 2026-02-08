@@ -1045,6 +1045,8 @@ struct DecisionOptionPageView: View {
     @State private var showingMail = false
     @State private var showingMessage = false
     @State private var pdfData: Data?
+    @State private var docuSignError: String?
+    @ObservedObject private var docuSignService = DocuSignService.shared
     
     // Show the option for the tier user selected on Final Summary (don't require isSelectedByCustomer)
     private var systemsWithOption: [(EstimateSystem, SystemOption)] {
@@ -1068,13 +1070,94 @@ struct DecisionOptionPageView: View {
         systemsWithOption.map { $0.1.price }.reduce(0, +)
     }
     
+    private var totalIncludingAddOns: Double {
+        optionSum + addOnsSubtotal
+    }
+    
+    private var totalWithMarkup: Double {
+        totalIncludingAddOns * (1 + (financeMarkupPercent / 100.0))
+    }
+    
     private var displayTotal: Double {
-        let total = optionSum + addOnsSubtotal
         let paymentOption = PaymentOption(rawValue: paymentOptionRaw) ?? .cashCheckZelle
         switch paymentOption {
-        case .cashCheckZelle: return total
-        case .creditCard: return total * (1 + creditCardFeePercent / 100.0)
-        case .finance: return total * (1 + (financeMarkupPercent / 100.0))
+        case .cashCheckZelle: return totalIncludingAddOns
+        case .creditCard: return totalIncludingAddOns * (1 + creditCardFeePercent / 100.0)
+        case .finance: return totalWithMarkup
+        }
+    }
+    
+    private var selectionMonthlyPaymentText: String {
+        guard let value = financeMonthlyPayment(total: totalWithMarkup,
+                                                ratePercent: financeRatePercent,
+                                                termMonths: financeTermMonths) else {
+            return "—"
+        }
+        return formatCurrency(value)
+    }
+    
+    /// Payment options block: same as equipment/estimate page (Cash/Check, Credit Card, Finance) so customer sees what they will pay before signing.
+    private var selectionPaymentOptionsSection: some View {
+        let paymentOption = PaymentOption(rawValue: paymentOptionRaw) ?? .cashCheckZelle
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Payment: \(paymentOption.displayName)")
+                .font(.subheadline.bold())
+                .foregroundStyle(.secondary)
+            if paymentOption == .creditCard {
+                HStack {
+                    Text("Grand Total")
+                    Spacer()
+                    Text(formatCurrency(totalIncludingAddOns))
+                }
+                HStack {
+                    Text("Credit Card Fee (\(creditCardFeePercent, specifier: "%.1f")%)")
+                        .bold()
+                    Spacer()
+                    Text(formatCurrency(totalIncludingAddOns * (creditCardFeePercent / 100.0)))
+                        .bold()
+                }
+                .padding(.vertical, 6)
+                .padding(.horizontal, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.accentColor.opacity(0.6), lineWidth: 1)
+                )
+            }
+            if paymentOption == .finance {
+                HStack {
+                    Text("Total with Finance")
+                    Spacer()
+                    Text(formatCurrency(totalWithMarkup))
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Financing Plan")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    HStack {
+                        Spacer()
+                        Text("\(financeTermMonths) months – \(selectionMonthlyPaymentText)/month")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(Color.primary.opacity(0.9))
+                    }
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color(UIColor.secondarySystemBackground))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)
+                    )
+                }
+            }
+            HStack {
+                Text(paymentOption == .creditCard ? "Total" : "Grand Total")
+                    .bold()
+                Spacer()
+                Text(formatCurrency(displayTotal))
+                    .font(.title3.bold())
+            }
         }
     }
     
@@ -1151,13 +1234,7 @@ struct DecisionOptionPageView: View {
                             Spacer()
                             Text(formatCurrency(addOnsSubtotal))
                         }
-                        HStack {
-                            Text("Total")
-                                .bold()
-                            Spacer()
-                            Text(formatCurrency(displayTotal))
-                                .font(.title3.bold())
-                        }
+                        selectionPaymentOptionsSection
                     }
                     
                     // Warranty and Included Services (above signature)
@@ -1195,7 +1272,7 @@ struct DecisionOptionPageView: View {
             }
             .sheet(isPresented: $showingActivity) {
                 if let data = pdfData {
-                    ActivityView(activityItems: [data, "Estimate.pdf"])
+                    ActivityView(activityItems: [data, "Estimate.pdf"], onDismiss: { showingActivity = false })
                 } else {
                     ProgressView("Preparing PDF…")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1208,7 +1285,8 @@ struct DecisionOptionPageView: View {
                         subject: "Your Estimate",
                         recipients: estimateVM.currentEstimate.email.isEmpty ? [] : [estimateVM.currentEstimate.email],
                         messageBody: "Please find your estimate attached.",
-                        attachments: [(data, "application/pdf", "Estimate.pdf")]
+                        attachments: [(data, "application/pdf", "Estimate.pdf")],
+                        onDismiss: { showingMail = false }
                     )
                 } else {
                     ProgressView("Preparing…")
@@ -1220,7 +1298,8 @@ struct DecisionOptionPageView: View {
                     MessageComposerView(
                         recipients: estimateVM.currentEstimate.phone.isEmpty ? [] : [estimateVM.currentEstimate.phone],
                         messageBody: "Your estimate is attached.",
-                        attachments: [(data, "com.adobe.pdf", "Estimate.pdf")]
+                        attachments: [(data, "com.adobe.pdf", "Estimate.pdf")],
+                        onDismiss: { showingMessage = false }
                     )
                 } else {
                     ProgressView("Preparing…")
@@ -1462,6 +1541,37 @@ struct DecisionOptionPageView: View {
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(Color(UIColor.separator), lineWidth: 1)
             )
+            Button {
+                let pdf = EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
+                docuSignService.startSigning(
+                    estimate: estimateVM.currentEstimate,
+                    pdfData: pdf,
+                    onSigned: { signedData in
+                        if let data = signedData {
+                            estimateVM.currentEstimate.customerSignatureImageData = data
+                            estimateVM.recalculateTotals()
+                            estimateVM.approveEstimate()
+                        }
+                    },
+                    onError: { message in
+                        docuSignError = message
+                    }
+                )
+            } label: {
+                Label("Sign with DocuSign", systemImage: "signature")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .alert("DocuSign", isPresented: Binding(
+                get: { docuSignError != nil },
+                set: { if !$0 { docuSignError = nil } }
+            )) {
+                Button("OK", role: .cancel) { docuSignError = nil }
+            } message: {
+                if let msg = docuSignError {
+                    Text(msg)
+                }
+            }
         }
     }
     
