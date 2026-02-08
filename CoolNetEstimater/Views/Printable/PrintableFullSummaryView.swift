@@ -10,6 +10,23 @@ struct PrintableSystemPage: View {
     let estimate: Estimate
     let system: EstimateSystem
     let index: Int
+    @AppStorage("tier_good_visible") private var tierGoodVisible: Bool = true
+    @AppStorage("tier_better_visible") private var tierBetterVisible: Bool = true
+    @AppStorage("tier_best_visible") private var tierBestVisible: Bool = true
+    
+    private var visibleTiers: [Tier] {
+        [Tier.good, .better, .best].filter { tier in
+            switch tier {
+            case .good: return tierGoodVisible
+            case .better: return tierBetterVisible
+            case .best: return tierBestVisible
+            }
+        }
+    }
+    
+    private func accentFor(_ tier: Tier) -> Color {
+        switch tier { case .good: return .blue; case .better: return .purple; case .best: return .pink }
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -26,9 +43,9 @@ struct PrintableSystemPage: View {
             }
             Text(system.name).font(.title3.bold())
             HStack(alignment: .top, spacing: 12) {
-                printableTierCard(system: system, tier: .good, accent: .blue)
-                printableTierCard(system: system, tier: .better, accent: .purple)
-                printableTierCard(system: system, tier: .best, accent: .pink)
+                ForEach(visibleTiers, id: \.self) { tier in
+                    printableTierCard(system: system, tier: tier, accent: accentFor(tier))
+                }
             }
         }
         .padding(16)
@@ -61,7 +78,7 @@ struct PrintableSystemPage: View {
                 }
                 if !enabledAddOns.isEmpty {
                     Divider().padding(.vertical, 2)
-                    Text("Add-Ons").font(.subheadline).bold()
+                    Text("Additional Equipment").font(.subheadline).bold()
                     ForEach(enabledAddOns) { addon in
                         HStack {
                             Text(addon.name).font(.caption2)
@@ -72,7 +89,7 @@ struct PrintableSystemPage: View {
                 }
                 Divider().padding(.vertical, 2)
                 HStack {
-                    Text("Add-Ons Subtotal")
+                    Text("Additional Equipment Subtotal")
                     Spacer()
                     Text(formatCurrency(addOnsSubtotal)).bold()
                 }
@@ -123,9 +140,30 @@ private let printableCreditCardFeePercent: Double = 3.5
 struct PrintableTotalsComparisonPage: View {
     let estimate: Estimate
     @AppStorage("payment_option") private var paymentOptionRaw: String = PaymentOption.cashCheckZelle.rawValue
+    @AppStorage("tier_good_visible") private var tierGoodVisible: Bool = true
+    @AppStorage("tier_better_visible") private var tierBetterVisible: Bool = true
+    @AppStorage("tier_best_visible") private var tierBestVisible: Bool = true
     @AppStorage("finance_markup_percent") private var financeMarkupPercent: Double = 0.0
     @AppStorage("finance_rate_percent") private var financeRatePercent: Double = 0.0
     @AppStorage("finance_term_months") private var financeTermMonths: Int = 12
+    
+    private var visibleTiers: [Tier] {
+        [Tier.good, .better, .best].filter { tier in
+            switch tier {
+            case .good: return tierGoodVisible
+            case .better: return tierBetterVisible
+            case .best: return tierBestVisible
+            }
+        }
+    }
+    
+    private func titleFor(_ tier: Tier) -> String {
+        switch tier { case .good: return "Good"; case .better: return "Better"; case .best: return "Best" }
+    }
+    
+    private func colorFor(_ tier: Tier) -> Color {
+        switch tier { case .good: return .blue; case .better: return .purple; case .best: return .pink }
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -133,9 +171,9 @@ struct PrintableTotalsComparisonPage: View {
             customerBlock
             Text("Proposal Totals by Series").font(.headline)
             HStack(alignment: .top, spacing: 12) {
-                column(title: "Good", tier: .good, color: .blue)
-                column(title: "Better", tier: .better, color: .purple)
-                column(title: "Best", tier: .best, color: .pink)
+                ForEach(visibleTiers, id: \.self) { tier in
+                    column(title: titleFor(tier), tier: tier, color: colorFor(tier))
+                }
             }
         }
         .padding(16)
@@ -179,7 +217,7 @@ struct PrintableTotalsComparisonPage: View {
                     }
                     Divider().padding(.vertical, 2)
                     HStack {
-                        Text("Add-Ons Subtotal")
+                        Text("Additional Equipment Subtotal")
                         Spacer()
                         Text(formatCurrency(addOnsSubtotal(for: sys))).bold()
                     }

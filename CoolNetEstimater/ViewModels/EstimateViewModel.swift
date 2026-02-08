@@ -376,7 +376,7 @@ final class EstimateViewModel: ObservableObject {
         lines.append("")
         lines.append("Totals:")
         lines.append("- Systems: \(formatCurrency(currentEstimate.systemsSubtotal))")
-        lines.append("- Add-Ons: \(formatCurrency(currentEstimate.addOnsSubtotal))")
+        lines.append("- Additional Equipment: \(formatCurrency(currentEstimate.addOnsSubtotal))")
         lines.append("- Total: \(formatCurrency(currentEstimate.grandTotal))")
         return lines.joined(separator: "\n")
     }

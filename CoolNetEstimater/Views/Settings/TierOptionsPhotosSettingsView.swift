@@ -17,6 +17,9 @@ struct TierOptionsPhotosSettingsView: View {
     @AppStorage("tier_good_photo_data") private var goodPhotoData: Data?
     @AppStorage("tier_better_photo_data") private var betterPhotoData: Data?
     @AppStorage("tier_best_photo_data") private var bestPhotoData: Data?
+    @AppStorage("tier_good_visible") private var tierGoodVisible: Bool = true
+    @AppStorage("tier_better_visible") private var tierBetterVisible: Bool = true
+    @AppStorage("tier_best_visible") private var tierBestVisible: Bool = true
     
     @State private var goodImage: Image? = nil
     @State private var betterImage: Image? = nil
@@ -36,23 +39,26 @@ struct TierOptionsPhotosSettingsView: View {
         VStack(spacing: 16) {
             Form {
                 Section {
-                    Text("Set a photo for each option tier. These photos will appear on the estimate page for Good, Better, and Best options.")
+                    Text("Set a photo and choose which options appear on the estimate. Only tiers with \"Show on estimate\" enabled will be shown to the customer.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
                 
                 tierPhotoSection(title: "Good", image: $goodImage, photoData: $goodPhotoData,
                                  selectedItem: $selectedGoodItem,
+                                 showOnEstimate: $tierGoodVisible,
                                  loadFromData: loadGood, remove: removeGood,
                                  loadFromPicker: loadGoodFromPicker)
                 
                 tierPhotoSection(title: "Better", image: $betterImage, photoData: $betterPhotoData,
                                  selectedItem: $selectedBetterItem,
+                                 showOnEstimate: $tierBetterVisible,
                                  loadFromData: loadBetter, remove: removeBetter,
                                  loadFromPicker: loadBetterFromPicker)
                 
                 tierPhotoSection(title: "Best", image: $bestImage, photoData: $bestPhotoData,
                                  selectedItem: $selectedBestItem,
+                                 showOnEstimate: $tierBestVisible,
                                  loadFromData: loadBest, remove: removeBest,
                                  loadFromPicker: loadBestFromPicker)
             }
@@ -84,11 +90,14 @@ struct TierOptionsPhotosSettingsView: View {
         image: Binding<Image?>,
         photoData: Binding<Data?>,
         selectedItem: Binding<PhotosPickerItem?>,
+        showOnEstimate: Binding<Bool>,
         loadFromData: () -> Void,
         remove: @escaping () -> Void,
         loadFromPicker: (PhotosPickerItem) async -> Void
     ) -> some View {
         Section(title) {
+            Toggle("Show on estimate", isOn: showOnEstimate)
+                .font(.subheadline)
             HStack(alignment: .top, spacing: 16) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)

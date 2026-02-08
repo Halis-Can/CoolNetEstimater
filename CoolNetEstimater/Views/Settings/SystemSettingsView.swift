@@ -108,7 +108,7 @@ struct SystemSettingsView: View {
                         Button {
                             exportMode = .addOnsOnly
                             showingExport = true
-                        } label: { Label("Export Add-On Templates (Share)", systemImage: "square.and.arrow.up") }
+                        } label: { Label("Export Additional Equipment Templates (Share)", systemImage: "square.and.arrow.up") }
                         Divider()
                         Button {
                             prepareFileExport(mode: .fileExporterAll)
@@ -118,7 +118,7 @@ struct SystemSettingsView: View {
                         } label: { Label("Save System Templates to Files", systemImage: "folder") }
                         Button {
                             prepareFileExport(mode: .fileExporterAddOns)
-                        } label: { Label("Save Add-On Templates to Files", systemImage: "folder") }
+                        } label: { Label("Save Additional Equipment Templates to Files", systemImage: "folder") }
                     } label: {
                         Label("Export", systemImage: "square.and.arrow.up")
                     }

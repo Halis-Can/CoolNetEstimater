@@ -13,6 +13,9 @@ private let creditCardFeePercent: Double = 3.5
 struct FinalSummaryView: View {
     @EnvironmentObject var estimateVM: EstimateViewModel
     @AppStorage("payment_option") private var paymentOptionRaw: String = PaymentOption.cashCheckZelle.rawValue
+    @AppStorage("tier_good_visible") private var tierGoodVisible: Bool = true
+    @AppStorage("tier_better_visible") private var tierBetterVisible: Bool = true
+    @AppStorage("tier_best_visible") private var tierBestVisible: Bool = true
     @AppStorage("finance_markup_percent") private var financeMarkupPercent: Double = 0.0
     @AppStorage("finance_rate_percent") private var financeRatePercent: Double = 0.0
     @AppStorage("finance_term_months") private var financeTermMonths: Int = 12
@@ -22,12 +25,9 @@ struct FinalSummaryView: View {
     @AppStorage("company_address") private var companyAddress: String = ""
     @AppStorage("company_license") private var companyLicense: String = ""
     @AppStorage("company_website") private var companyWebsite: String = ""
-    @State private var showingActivity = false
-    @State private var showingMail = false
-    @State private var showingMessage = false
-    @State private var pdfData: Data?
-    @State private var pdfURL: URL?
     let back: () -> Void
+    @State private var selectedTierForNext: Tier? = nil
+    @State private var showingDecisionPage: Bool = false
     
     // Force refresh when company info changes
     private var companyInfoId: String {
@@ -44,9 +44,10 @@ struct FinalSummaryView: View {
                             VStack(alignment: .leading, spacing: 24) {
                                 headerView(title: "Estimate")
                                 customerSection
-                                SystemSummaryPage(system: sys, index: idx)
-                                signatureSection
-                                shareButton
+                                SystemSummaryPage(system: sys, index: idx, visibleTiers: tiersVisibleInSettings, selectedTier: $selectedTierForNext)
+                                if selectedTierForNext != nil {
+                                    nextOptionsButton
+                                }
                             }
                             .frame(maxWidth: 900)
                             .frame(maxWidth: .infinity, alignment: .center)
@@ -58,9 +59,10 @@ struct FinalSummaryView: View {
                         VStack(alignment: .leading, spacing: 24) {
                             headerView(title: "Estimate Totals")
                             customerSection
-                            totalsComparisonSection
-                            signatureSection
-                            shareButton
+                            totalsComparisonSection(selectedTier: $selectedTierForNext)
+                            if selectedTierForNext != nil {
+                                nextOptionsButton
+                            }
                         }
                         .frame(maxWidth: 900)
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -75,10 +77,11 @@ struct FinalSummaryView: View {
                         headerView(title: "Estimate")
                         customerSection
                         if let only = enabledSystems.first {
-                            SystemSummaryPage(system: only, index: 0)
+                            SystemSummaryPage(system: only, index: 0, visibleTiers: tiersVisibleInSettings, selectedTier: $selectedTierForNext)
                         }
-                        signatureSection
-                        shareButton
+                        if selectedTierForNext != nil {
+                            nextOptionsButton
+                        }
                     }
                     .frame(maxWidth: 900)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -88,52 +91,39 @@ struct FinalSummaryView: View {
         }
         .background(Color(.systemBackground))
         .id(companyInfoId) // Force refresh when company info changes
-        .sheet(isPresented: $showingActivity) {
-            if let url = pdfURL {
-                ActivityView(activityItems: [url])
-            } else if let data = pdfData {
-                ActivityView(activityItems: [data, "CoolSeason Estimate.pdf"])
-            }
-        }
-        .sheet(isPresented: $showingMail) {
-            if let data = pdfData {
-                MailComposerView(
-                    subject: "CoolSeason Estimate",
-                    recipients: estimateVM.currentEstimate.email.isEmpty ? [] : [estimateVM.currentEstimate.email],
-                    messageBody: "Please find your HVAC estimate attached.",
-                    attachments: [(data, "application/pdf", "CoolSeasonEstimate.pdf")]
-                )
-            }
-        }
-        .sheet(isPresented: $showingMessage) {
-            if let data = pdfData {
-                MessageComposerView(
-                    recipients: estimateVM.currentEstimate.phone.isEmpty ? [] : [estimateVM.currentEstimate.phone],
-                    messageBody: "Your CoolSeason estimate is attached.",
-                    attachments: [(data, "com.adobe.pdf", "CoolSeasonEstimate.pdf")]
-                )
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    Button {
-                        generatePDF(); showingMail = true
-                    } label: { Label("Email", systemImage: "envelope") }
-                    #if os(iOS)
-                    .disabled(!MFMailComposeViewController.canSendMail())
-                    #endif
-                    Button {
-                        generatePDF(); showingMessage = true
-                    } label: { Label("Text", systemImage: "message") }
-                    #if os(iOS)
-                    .disabled(!MFMessageComposeViewController.canSendText())
-                    #endif
-                } label: {
-                    Image(systemName: "paperplane")
+        .fullScreenCover(isPresented: $showingDecisionPage) {
+            Group {
+                if let tier = selectedTierForNext {
+                    DecisionOptionPageView(tier: tier, onDismiss: { showingDecisionPage = false })
+                        .environmentObject(estimateVM)
+                } else {
+                    NavigationStack {
+                        Text("No option selected")
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .toolbar {
+                                ToolbarItem(placement: .navigationBarTrailing) {
+                                    Button("Done") { showingDecisionPage = false }
+                                }
+                            }
+                    }
                 }
             }
         }
+    }
+    
+    private var nextOptionsButton: some View {
+        Button {
+            showingDecisionPage = true
+        } label: {
+            Text("Next Options")
+                .font(.title2)
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+        }
+        .buttonStyle(.borderedProminent)
+        .frame(maxWidth: 400)
+        .frame(maxWidth: .infinity)
     }
     
     private var enabledSystems: [EstimateSystem] {
@@ -157,17 +147,6 @@ struct FinalSummaryView: View {
                     .foregroundStyle(.secondary)
             }
         }
-    }
-    
-    private var shareButton: some View {
-        Button {
-            generatePDF()
-            showingActivity = true
-        } label: {
-            Label("Share Estimate (Email / Text / PDF)", systemImage: "square.and.arrow.up")
-                .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.borderedProminent)
     }
     
     private var customerSection: some View {
@@ -252,8 +231,18 @@ struct FinalSummaryView: View {
         }
     }
     
-    private var visibleTiers: [Tier] {
+    private var tiersVisibleInSettings: [Tier] {
         [Tier.good, .better, .best].filter { tier in
+            switch tier {
+            case .good: return tierGoodVisible
+            case .better: return tierBetterVisible
+            case .best: return tierBestVisible
+            }
+        }
+    }
+    
+    private var visibleTiers: [Tier] {
+        tiersVisibleInSettings.filter { tier in
             estimateVM.currentEstimate.systems.contains { sys in
                 sys.options.contains { $0.tier == tier && $0.isSelectedByCustomer }
             }
@@ -340,7 +329,7 @@ struct FinalSummaryView: View {
                     Text(formatCurrency(optionSum))
                 }
                 HStack {
-                    Text("Add-Ons Subtotal")
+                    Text("Additional Equipment Subtotal")
                     Spacer()
                     Text(formatCurrency(addOnsSubtotal))
                 }
@@ -450,30 +439,33 @@ struct FinalSummaryView: View {
             return formatCurrency(value)
         }
         
-        private func financingPlanTitle(monthlyText: String) -> String {
-            let rateStr = financeRatePercent == 0 ? "0%" : String(format: "%.1f%%", financeRatePercent)
-            return "Financing Plan: \(rateStr) for \(financeTermMonths) Months — \(monthlyText)/month"
+        private func financingPlanInnerText(monthlyText: String) -> String {
+            "\(financeTermMonths) months – \(monthlyText)/month"
         }
         
         @ViewBuilder
         private func financingPlanBlock(monthlyText: String) -> some View {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(financingPlanTitle(monthlyText: monthlyText))
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.primary)
-                    .multilineTextAlignment(.leading)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Financing Plan")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Spacer()
+                    Text(financingPlanInnerText(monthlyText: monthlyText))
+                        .font(.subheadline.bold())
+                        .foregroundStyle(Color.primary.opacity(0.9))
+                }
+                .padding(.vertical, 10)
+                .padding(.horizontal, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(UIColor.secondarySystemBackground))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)
+                )
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 10)
-            .padding(.horizontal, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(UIColor.secondarySystemBackground))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)
-            )
         }
         
         private var imageNames: [String] {
@@ -506,7 +498,17 @@ struct FinalSummaryView: View {
     private struct SystemSummaryPage: View {
         let system: EstimateSystem
         let index: Int
+        let visibleTiers: [Tier]
+        @Binding var selectedTier: Tier?
         @EnvironmentObject var estimateVM: EstimateViewModel
+        
+        private func accentColor(for tier: Tier) -> Color {
+            switch tier {
+            case .good: return .blue
+            case .better: return .purple
+            case .best: return .pink
+            }
+        }
         
         var body: some View {
             VStack(alignment: .leading, spacing: 12) {
@@ -521,11 +523,16 @@ struct FinalSummaryView: View {
                 }
                 Text(system.name).font(.title2).bold()
                 
-                // Three side-by-side tier cards for this system
                 HStack(alignment: .top, spacing: 12) {
-                    SystemTierCard(system: system, tier: .good, accent: Color.blue)
-                    SystemTierCard(system: system, tier: .better, accent: Color.purple)
-                    SystemTierCard(system: system, tier: .best, accent: Color.pink)
+                    ForEach(visibleTiers, id: \.self) { tier in
+                        SystemTierCard(
+                            system: system,
+                            tier: tier,
+                            accent: accentColor(for: tier),
+                            isSelected: selectedTier == tier,
+                            onTap: { selectedTier = tier }
+                        )
+                    }
                 }
             }
             .padding()
@@ -567,6 +574,8 @@ struct FinalSummaryView: View {
         let system: EstimateSystem
         let tier: Tier
         let accent: Color
+        let isSelected: Bool
+        let onTap: () -> Void
         @EnvironmentObject var estimateVM: EstimateViewModel
         @AppStorage("payment_option") private var paymentOptionRaw: String = PaymentOption.cashCheckZelle.rawValue
         @AppStorage("finance_rate_percent") private var financeRatePercent: Double = 0.0
@@ -575,11 +584,19 @@ struct FinalSummaryView: View {
         
         var body: some View {
             let paymentOption = PaymentOption(rawValue: paymentOptionRaw) ?? .cashCheckZelle
-            VStack(alignment: .leading, spacing: 8) {
-                Text(seriesLabel(tier))
-                    .font(.headline)
-                TierOptionPhotoView(tier: tier, height: 70, fallbackSymbol: option?.imageName ?? "shippingbox")
-                if let opt = option {
+            Button(action: onTap) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text(seriesLabel(tier))
+                            .font(.headline)
+                        Spacer()
+                        if isSelected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        }
+                    }
+                    TierOptionPhotoView(tier: tier, height: 70, fallbackSymbol: option?.imageName ?? "shippingbox")
+                    if let opt = option {
                     Text("\(formatSystemCapacity(system)) • \(system.equipmentType.rawValue)")
                         .font(.subheadline)
                     Text("\(opt.seer, specifier: "%.0f") SEER • \(opt.stage)")
@@ -597,7 +614,7 @@ struct FinalSummaryView: View {
                     // List add-ons individually for this system (smaller text to fit columns)
                     if !enabledAddOnsForSystem.isEmpty {
                         Divider().padding(.vertical, 2)
-                        Text("Add-Ons").font(.subheadline).bold()
+                        Text("Additional Equipment").font(.subheadline).bold()
                         VStack(alignment: .leading, spacing: 3) {
                             ForEach(enabledAddOnsForSystem) { addon in
                                 HStack(alignment: .firstTextBaseline) {
@@ -616,7 +633,7 @@ struct FinalSummaryView: View {
                     }
                     Divider().padding(.vertical, 4)
                     HStack {
-                        Text("Add-Ons")
+                        Text("Additional Equipment")
                         Spacer()
                         Text(formatCurrency(addOnsSubtotal))
                     }
@@ -629,11 +646,13 @@ struct FinalSummaryView: View {
                 } else {
                     Text("No option available").font(.caption).foregroundStyle(.secondary)
                 }
+                }
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(RoundedRectangle(cornerRadius: 12).fill(accent.opacity(isSelected ? 0.35 : 0.16)))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(accent.opacity(isSelected ? 0.9 : 0.45), lineWidth: isSelected ? 3 : 1))
             }
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 12).fill(accent.opacity(0.16)))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(accent.opacity(0.45), lineWidth: 1))
+            .buttonStyle(.plain)
         }
         
         private var option: SystemOption? {
@@ -699,30 +718,33 @@ struct FinalSummaryView: View {
             return formatCurrency(value)
         }
         
-        private func systemTierFinancingTitle(monthlyText: String) -> String {
-            let rateStr = financeRatePercent == 0 ? "0%" : String(format: "%.1f%%", financeRatePercent)
-            return "Financing Plan: \(rateStr) for \(financeTermMonths) Months — \(monthlyText)/month"
+        private func systemTierFinancingInnerText(monthlyText: String) -> String {
+            "\(financeTermMonths) months – \(monthlyText)/month"
         }
         
         @ViewBuilder
         private func systemTierFinancingBlock(monthlyText: String) -> some View {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(systemTierFinancingTitle(monthlyText: monthlyText))
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.primary)
-                    .multilineTextAlignment(.leading)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Financing Plan")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Spacer()
+                    Text(systemTierFinancingInnerText(monthlyText: monthlyText))
+                        .font(.subheadline.bold())
+                        .foregroundStyle(Color.primary.opacity(0.9))
+                }
+                .padding(.vertical, 10)
+                .padding(.horizontal, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(UIColor.secondarySystemBackground))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)
+                )
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 10)
-            .padding(.horizontal, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(UIColor.secondarySystemBackground))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)
-            )
         }
         
         private var enabledAddOnsForSystem: [AddOn] {
@@ -815,7 +837,7 @@ struct FinalSummaryView: View {
                 Text(formatCurrency(estimateVM.currentEstimate.systemsSubtotal))
             }
             HStack {
-                Text("Add-Ons Subtotal")
+                Text("Additional Equipment Subtotal")
                 Spacer()
                 Text(formatCurrency(estimateVM.currentEstimate.addOnsSubtotal))
             }
@@ -839,20 +861,40 @@ struct FinalSummaryView: View {
     }
     
     // Comparison of proposal totals per tier across all systems
-    private var totalsComparisonSection: some View {
+    private func totalsComparisonSection(selectedTier: Binding<Tier?>) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Proposal Totals by Series").font(.title2).bold()
             HStack(alignment: .top, spacing: 12) {
-                tierTotalsColumn(title: "Good", tier: .good, color: .blue)
-                tierTotalsColumn(title: "Better", tier: .better, color: .purple)
-                tierTotalsColumn(title: "Best", tier: .best, color: .pink)
+                ForEach(tiersVisibleInSettings, id: \.self) { tier in
+                    Button {
+                        selectedTier.wrappedValue = tier
+                    } label: {
+                        tierTotalsColumn(title: label(for: tier), tier: tier, color: accentColor(for: tier), isSelected: selectedTier.wrappedValue == tier)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
     }
     
-    private func tierTotalsColumn(title: String, tier: Tier, color: Color) -> some View {
+    private func accentColor(for tier: Tier) -> Color {
+        switch tier {
+        case .good: return .blue
+        case .better: return .purple
+        case .best: return .pink
+        }
+    }
+    
+    private func tierTotalsColumn(title: String, tier: Tier, color: Color, isSelected: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.headline)
+            HStack {
+                Text(title).font(.headline)
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
+            }
             ForEach(Array(enabledSystems.enumerated()), id: \.element.id) { idx, sys in
                 VStack(alignment: .leading, spacing: 4) {
                     Text("\(idx + 1). System").font(.subheadline).bold()
@@ -862,7 +904,7 @@ struct FinalSummaryView: View {
                         Spacer()
                         Text(formatCurrency(optionPrice(system: sys, tier: tier))).bold()
                     }
-                    // Add-ons listed individually
+                    // Additional equipment listed individually
                     let addons = addOnsForSystem(sys)
                     if !addons.isEmpty {
                         ForEach(addons) { addon in
@@ -876,7 +918,7 @@ struct FinalSummaryView: View {
                     // Subtotals
                     Divider().padding(.vertical, 2)
                     HStack {
-                        Text("Add-Ons Subtotal")
+                        Text("Additional Equipment Subtotal")
                         Spacer()
                         Text(formatCurrency(addOnsSubtotal(for: sys))).bold()
                     }
@@ -923,8 +965,8 @@ struct FinalSummaryView: View {
         }
         .padding()
         .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.16)))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(color.opacity(0.45), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 12).fill(color.opacity(isSelected ? 0.35 : 0.16)))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(color.opacity(isSelected ? 0.9 : 0.45), lineWidth: isSelected ? 3 : 1))
     }
     
     private func perSystemTierTotal(system: EstimateSystem, tier: Tier) -> Double {
@@ -952,93 +994,551 @@ struct FinalSummaryView: View {
         return formatCurrency(value)
     }
     
-    private func tierTotalsFinancingTitle(monthlyText: String) -> String {
-        let rateStr = financeRatePercent == 0 ? "0%" : String(format: "%.1f%%", financeRatePercent)
-        return "Financing Plan: \(rateStr) for \(financeTermMonths) Months — \(monthlyText)/month"
+    private func tierTotalsFinancingInnerText(monthlyText: String) -> String {
+        "\(financeTermMonths) months – \(monthlyText)/month"
     }
     
     @ViewBuilder
     private func tierTotalsFinancingBlock(totalWithMarkup: Double) -> some View {
         let monthlyText = monthlyPaymentText(for: totalWithMarkup)
-        VStack(alignment: .leading, spacing: 6) {
-            Text(tierTotalsFinancingTitle(monthlyText: monthlyText))
-                .font(.subheadline.bold())
-                .foregroundStyle(.primary)
-                .multilineTextAlignment(.leading)
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Financing Plan")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            HStack {
+                Spacer()
+                Text(tierTotalsFinancingInnerText(monthlyText: monthlyText))
+                    .font(.subheadline.bold())
+                    .foregroundStyle(Color.primary.opacity(0.9))
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(UIColor.secondarySystemBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)
+            )
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 10)
-        .padding(.horizontal, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(UIColor.secondarySystemBackground))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)
-        )
     }
     
-    private var signatureSection: some View {
-        HStack {
-            Spacer()
-            VStack(alignment: .trailing, spacing: 8) {
-                Text("Signature").font(.headline)
-                SignatureView(signatureData: Binding(
-                    get: { estimateVM.currentEstimate.customerSignatureImageData },
-                    set: { newData in
-                        estimateVM.currentEstimate.customerSignatureImageData = newData
-                        estimateVM.recalculateTotals()
-                        // If signature is added, automatically approve the estimate
-                        if newData != nil {
-                            estimateVM.approveEstimate()
+}
+
+// MARK: - Decision page (selected option only, no Good/Better/Best label)
+struct DecisionOptionPageView: View {
+    let tier: Tier
+    let onDismiss: () -> Void
+    @EnvironmentObject var estimateVM: EstimateViewModel
+    @AppStorage("payment_option") private var paymentOptionRaw: String = PaymentOption.cashCheckZelle.rawValue
+    @AppStorage("finance_markup_percent") private var financeMarkupPercent: Double = 0.0
+    @AppStorage("finance_rate_percent") private var financeRatePercent: Double = 0.0
+    @AppStorage("finance_term_months") private var financeTermMonths: Int = 12
+    @AppStorage("company_name") private var companyName: String = "CoolSeason HVAC"
+    @AppStorage("company_phone") private var companyPhone: String = ""
+    @AppStorage("company_email") private var companyEmail: String = ""
+    @AppStorage("company_address") private var companyAddress: String = ""
+    @AppStorage("company_license") private var companyLicense: String = ""
+    @AppStorage("company_website") private var companyWebsite: String = ""
+    @State private var showingActivity = false
+    @State private var showingMail = false
+    @State private var showingMessage = false
+    @State private var pdfData: Data?
+    
+    // Show the option for the tier user selected on Final Summary (don't require isSelectedByCustomer)
+    private var systemsWithOption: [(EstimateSystem, SystemOption)] {
+        estimateVM.currentEstimate.systems
+            .filter { $0.enabled }
+            .compactMap { sys in
+                guard let opt = sys.options.first(where: { $0.tier == tier }) else { return nil }
+                return (sys, opt)
+            }
+    }
+    
+    private var tierPhotoFallbackSymbol: String {
+        systemsWithOption.first?.1.imageName ?? "shippingbox"
+    }
+    
+    private var addOnsSubtotal: Double {
+        estimateVM.currentEstimate.addOns.filter { $0.enabled }.reduce(0) { $0 + $1.price }
+    }
+    
+    private var optionSum: Double {
+        systemsWithOption.map { $0.1.price }.reduce(0, +)
+    }
+    
+    private var displayTotal: Double {
+        let total = optionSum + addOnsSubtotal
+        let paymentOption = PaymentOption(rawValue: paymentOptionRaw) ?? .cashCheckZelle
+        switch paymentOption {
+        case .cashCheckZelle: return total
+        case .creditCard: return total * (1 + creditCardFeePercent / 100.0)
+        case .finance: return total * (1 + (financeMarkupPercent / 100.0))
+        }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Same as Estimate page: company logo + estimate # on top row, company info + customer on second row
+                    selectionPageHeaderRow
+                    selectionPageCustomerRow
+                    
+                    // High-quality tier system picture(s)
+                    tierHeroSection
+                    
+                    if systemsWithOption.isEmpty {
+                        Text("No option selected for this series.")
+                            .foregroundStyle(.secondary)
+                            .padding()
+                    } else {
+                        ForEach(Array(systemsWithOption.enumerated()), id: \.element.0.id) { _, item in
+                            let (sys, opt) = item
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(sys.name)
+                                    .font(.headline)
+                                Text("\(formatSystemCapacity(sys)) • \(sys.equipmentType.rawValue)")
+                                    .font(.subheadline)
+                                Text("\(opt.seer, specifier: "%.0f") SEER • \(opt.stage)")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                if let m = opt.outdoorModel, !m.isEmpty {
+                                    Text("Outdoor: \(m)").font(.caption).foregroundStyle(.secondary)
+                                }
+                                if let m = opt.indoorModel, !m.isEmpty {
+                                    Text("Indoor: \(m)").font(.caption).foregroundStyle(.secondary)
+                                }
+                                if let m = opt.furnaceModel, !m.isEmpty {
+                                    Text("Furnace: \(m)").font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(UIColor.secondarySystemBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        
+                        if !estimateVM.currentEstimate.addOns.filter({ $0.enabled }).isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Additional Equipment")
+                                    .font(.headline)
+                                ForEach(estimateVM.currentEstimate.addOns.filter { $0.enabled }) { addon in
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(addon.name)
+                                            Text(addon.description).font(.caption).foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        Text(formatCurrency(addon.price)).bold()
+                                    }
+                                    .padding(8)
+                                    .background(Color(UIColor.secondarySystemBackground))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                            }
+                        }
+                        
+                        Divider().padding(.vertical, 8)
+                        HStack {
+                            Text("Systems Subtotal")
+                            Spacer()
+                            Text(formatCurrency(optionSum))
+                        }
+                        HStack {
+                            Text("Additional Equipment Subtotal")
+                            Spacer()
+                            Text(formatCurrency(addOnsSubtotal))
+                        }
+                        HStack {
+                            Text("Total")
+                                .bold()
+                            Spacer()
+                            Text(formatCurrency(displayTotal))
+                                .font(.title3.bold())
                         }
                     }
-                ))
-                .frame(width: 260, height: 120)
-                .background(Color(UIColor.secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                    
+                    // Warranty and Included Services (above signature)
+                    warrantyAndIncludedServicesSection
+                    
+                    // Terms, warranty details & Cool Season promises
+                    termsAndPromisesSection
+                    
+                    // Signature section
+                    signatureSection
+                    
+                    // Share (Text / Mail / PDF)
+                    shareSection
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity)
+                .background(Color(UIColor.secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 20))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: 20)
                         .stroke(Color(UIColor.separator), lineWidth: 1)
                 )
-                // Show status badge
-                if estimateVM.currentEstimate.status == .approved {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                        Text("Approved")
-                            .font(.caption)
-                            .foregroundStyle(.green)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("Your Selection")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        onDismiss()
                     }
-                    .padding(.top, 4)
+                }
+            }
+            .sheet(isPresented: $showingActivity) {
+                if let data = pdfData {
+                    ActivityView(activityItems: [data, "Estimate.pdf"])
+                } else {
+                    ProgressView("Preparing PDF…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            #if canImport(MessageUI)
+            .sheet(isPresented: $showingMail) {
+                if let data = pdfData {
+                    MailComposerView(
+                        subject: "Your Estimate",
+                        recipients: estimateVM.currentEstimate.email.isEmpty ? [] : [estimateVM.currentEstimate.email],
+                        messageBody: "Please find your estimate attached.",
+                        attachments: [(data, "application/pdf", "Estimate.pdf")]
+                    )
+                } else {
+                    ProgressView("Preparing…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .sheet(isPresented: $showingMessage) {
+                if let data = pdfData {
+                    MessageComposerView(
+                        recipients: estimateVM.currentEstimate.phone.isEmpty ? [] : [estimateVM.currentEstimate.phone],
+                        messageBody: "Your estimate is attached.",
+                        attachments: [(data, "com.adobe.pdf", "Estimate.pdf")]
+                    )
+                } else {
+                    ProgressView("Preparing…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            #endif
+        }
+    }
+    
+    // Same design as Estimate page: logo left, estimate # and date right
+    private var selectionPageHeaderRow: some View {
+        HStack(alignment: .center, spacing: 16) {
+            AppLogoHeader(height: 60)
+                .frame(maxWidth: 200, alignment: .leading)
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("Estimate # \(estimateVM.currentEstimate.estimateNumber.isEmpty ? "—" : estimateVM.currentEstimate.estimateNumber)")
+                    .font(.headline)
+                Text(estimateVM.currentEstimate.estimateDate.formatted(date: .abbreviated, time: .omitted))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+    
+    // Same design as Estimate page: company info left, Customer section right
+    private var selectionPageCustomerRow: some View {
+        HStack(alignment: .top, spacing: 24) {
+            VStack(alignment: .leading, spacing: 6) {
+                if !companyName.isEmpty {
+                    Text(companyName)
+                        .font(.title2.bold())
+                }
+                if !companyAddress.isEmpty {
+                    Text(companyAddress)
+                        .font(.subheadline)
+                }
+                if !companyLicense.isEmpty {
+                    Text("Lic: \(companyLicense)")
+                        .font(.subheadline)
+                }
+                if !companyPhone.isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: "phone.fill")
+                        Text(companyPhone)
+                    }
+                    .font(.subheadline)
+                }
+                if !companyEmail.isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: "envelope.fill")
+                        Text(companyEmail)
+                    }
+                    .font(.subheadline)
+                }
+                if !companyWebsite.isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: "globe")
+                        Text(companyWebsite.lowercased())
+                    }
+                    .font(.subheadline)
+                }
+            }
+            Spacer()
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Customer").font(.title2).bold()
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("Name:").font(.subheadline.bold())
+                    Text(estimateVM.currentEstimate.customerName).font(.subheadline)
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("Address:").font(.subheadline.bold())
+                    Text(estimateVM.currentEstimate.address).font(.subheadline)
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("Phone:").font(.subheadline.bold())
+                    Text(estimateVM.currentEstimate.phone).font(.subheadline)
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("Email:").font(.subheadline.bold())
+                    Text(estimateVM.currentEstimate.email).font(.subheadline)
                 }
             }
         }
     }
     
-    private func generatePDF() {
-        // Build page-per-system + totals comparison PDF that mirrors the on-screen layout
-        let estimate = estimateVM.currentEstimate
-        let systems = estimate.systems.filter { $0.enabled }
-        var pages: [AnyView] = []
-        for (idx, sys) in systems.enumerated() {
-            pages.append(AnyView(PrintableSystemPage(estimate: estimate, system: sys, index: idx)))
+    private var tierHeroSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TierOptionPhotoView(tier: tier, height: 240, fallbackSymbol: tierPhotoFallbackSymbol)
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color(UIColor.separator), lineWidth: 1)
+                )
         }
-        pages.append(AnyView(PrintableTotalsComparisonPage(estimate: estimate)))
-        if let url = SwiftUIViewPDFRenderer.renderPages(pages: pages) {
-            pdfURL = url
-            pdfData = nil
-            return
+    }
+    
+    private var warrantyTextsForSection: [String] {
+        systemsWithOption.map(\.1.warrantyText).compactMap { $0 }.filter { !$0.isEmpty }
+    }
+    
+    private var advantagesForSection: [String] {
+        systemsWithOption.flatMap(\.1.advantages).filter { !$0.isEmpty }
+    }
+    
+    private static let standardIncludedServices: [String] = [
+        "New Float Switch SS2",
+        "New Drain pan replacement, New condenser Pad replacement",
+        "Reconnect the existing high voltage",
+        "Reconnect existing drain PVC lines",
+        "Reconnect existing Gas lines",
+        "Connect existing control wiring to the thermostat."
+    ]
+    
+    private var warrantyAndIncludedServicesSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Warranty and Included Services")
+                .font(.title3.bold())
+            VStack(alignment: .leading, spacing: 12) {
+                if !warrantyTextsForSection.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Warranty")
+                            .font(.subheadline.bold())
+                        ForEach(Array(warrantyTextsForSection.enumerated()), id: \.offset) { _, w in
+                            Text(w)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                // Included Services (standard items + optional advantages from option)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Included Services")
+                        .font(.subheadline.bold())
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(Self.standardIncludedServices.enumerated()), id: \.offset) { _, item in
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.green)
+                                Text(item)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        ForEach(Array(advantagesForSection.enumerated()), id: \.offset) { _, adv in
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.green)
+                                Text(adv)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                if warrantyTextsForSection.isEmpty && advantagesForSection.isEmpty && Self.standardIncludedServices.isEmpty {
+                    Text("No warranty or included services specified.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(UIColor.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
         }
-        // Fallbacks
-        if let url = SummaryPDFRenderer().renderPDF(estimate: estimate) {
-            pdfURL = url
-            pdfData = nil
-            return
+    }
+    
+    private var termsAndPromisesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Thanks for the opportunity to serve you; see the system choice we're proposing for you above. All systems include the standard Carrier® 10-Year Parts Warranty and 1-Year Labor Warranty. Your prices include all installation materials, labor and tax.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text("No further charges will apply.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text("Materials and work in addition to that described here will be given only on the Purchaser's authorization and will be paid by the Purchaser as an extra charge.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text("The system will be installed to meet or exceed county codes.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text("With every quality installation from Cool Season Heating & Cooling, we promise the following:")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 6) {
+                bulletItem("Your equipment will be installed per manufacturer's specifications by our highly trained installation technicians.")
+                bulletItem("We will perform a complete system check at the conclusion of the installation, to ensure all components are working properly.")
+                bulletItem("We will perform a complete clean-up of the job site, and we will remove and properly dispose of your old equipment.")
+                bulletItem("We will conduct a walk-through after the job is complete, to show you your new equipment and tell you how to operate it.")
+                bulletItem("We will install your new system in a workmanlike manner, and adhere to all applicable state and local codes and regulations.")
+            }
+            Text("If you would like to move forward with these options, please get in touch with us to schedule your installation.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text("Thanks for doing business with Cool Season Heating & Cooling!")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
-        pdfData = EstimatePDFRenderer.render(estimate: estimate)
-        pdfURL = nil
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(UIColor.tertiarySystemFill))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+    
+    private func bulletItem(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text("•")
+                .font(.subheadline)
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+    
+    private var signatureSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Signature")
+                .font(.headline)
+            SignatureView(signatureData: Binding(
+                get: { estimateVM.currentEstimate.customerSignatureImageData },
+                set: { newData in
+                    estimateVM.currentEstimate.customerSignatureImageData = newData
+                    estimateVM.recalculateTotals()
+                    if newData != nil {
+                        estimateVM.approveEstimate()
+                    }
+                }
+            ))
+            .frame(maxWidth: .infinity)
+            .frame(height: 140)
+            .background(Color(UIColor.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color(UIColor.separator), lineWidth: 1)
+            )
+        }
+    }
+    
+    private var shareSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Share")
+                .font(.headline)
+            HStack(spacing: 12) {
+                Button {
+                    let data = EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
+                    pdfData = data
+                    DispatchQueue.main.async {
+                        showingActivity = true
+                    }
+                } label: {
+                    Label("PDF", systemImage: "doc.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                #if os(iOS)
+                Button {
+                    let data = EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
+                    pdfData = data
+                    DispatchQueue.main.async {
+                        showingMail = true
+                    }
+                } label: {
+                    Label("Email", systemImage: "envelope.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!MFMailComposeViewController.canSendMail())
+                Button {
+                    let data = EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
+                    pdfData = data
+                    DispatchQueue.main.async {
+                        showingMessage = true
+                    }
+                } label: {
+                    Label("Text", systemImage: "message.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!MFMessageComposeViewController.canSendText())
+                #else
+                Button {
+                    let data = EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
+                    pdfData = data
+                    DispatchQueue.main.async {
+                        showingMail = true
+                    }
+                } label: {
+                    Label("Email", systemImage: "envelope.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                Button {
+                    let data = EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
+                    pdfData = data
+                    DispatchQueue.main.async {
+                        showingMessage = true
+                    }
+                } label: {
+                    Label("Text", systemImage: "message.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                #endif
+            }
+        }
+    }
+    
+    private func formatSystemCapacity(_ sys: EstimateSystem) -> String {
+        if sys.equipmentType == .furnaceOnly {
+            return "\(Int(sys.tonnage).formatted(.number.grouping(.automatic))) BTU"
+        }
+        return formatTonnage(sys.tonnage)
     }
 }
 

@@ -82,7 +82,7 @@ struct EstimatePDFRenderer {
     }
     
     private static func drawAddOns_iOS(estimate: Estimate) {
-        let heading = "Add-Ons"
+        let heading = "Additional Equipment"
         heading.draw(at: CGPoint(x: 40, y: 260), withAttributes: [.font: UIFont.boldSystemFont(ofSize: 18)])
         
         var y: CGFloat = 285
@@ -101,7 +101,7 @@ struct EstimatePDFRenderer {
         let y: CGFloat = 420
         "Systems Subtotal: \(formatCurrency(estimate.systemsSubtotal))"
             .draw(at: CGPoint(x: 40, y: y), withAttributes: [.font: UIFont.systemFont(ofSize: 14)])
-        "Add-Ons Subtotal: \(formatCurrency(estimate.addOnsSubtotal))"
+        "Additional Equipment Subtotal: \(formatCurrency(estimate.addOnsSubtotal))"
             .draw(at: CGPoint(x: 40, y: y + 22), withAttributes: [.font: UIFont.systemFont(ofSize: 14)])
         "Grand Total: \(formatCurrency(estimate.grandTotal))"
             .draw(at: CGPoint(x: 40, y: y + 44), withAttributes: [.font: UIFont.boldSystemFont(ofSize: 18)])
@@ -187,7 +187,7 @@ struct EstimatePDFRenderer {
     }
     
     private static func drawAddOns_macOS(estimate: Estimate, context: CGContext, pageSize: CGSize) {
-        let heading = "Add-Ons"
+        let heading = "Additional Equipment"
         let font = NSFont.boldSystemFont(ofSize: 18)
         let headingString = NSAttributedString(string: heading, attributes: [.font: font])
         headingString.draw(at: CGPoint(x: 40, y: pageSize.height - 260 - 18))
@@ -215,7 +215,7 @@ struct EstimatePDFRenderer {
         let systemsString = NSAttributedString(string: "Systems Subtotal: \(formatCurrency(estimate.systemsSubtotal))", attributes: [.font: font])
         systemsString.draw(at: CGPoint(x: 40, y: y))
         
-        let addOnsString = NSAttributedString(string: "Add-Ons Subtotal: \(formatCurrency(estimate.addOnsSubtotal))", attributes: [.font: font])
+        let addOnsString = NSAttributedString(string: "Additional Equipment Subtotal: \(formatCurrency(estimate.addOnsSubtotal))", attributes: [.font: font])
         addOnsString.draw(at: CGPoint(x: 40, y: y - 22))
         
         let totalString = NSAttributedString(string: "Grand Total: \(formatCurrency(estimate.grandTotal))", attributes: [.font: boldFont])

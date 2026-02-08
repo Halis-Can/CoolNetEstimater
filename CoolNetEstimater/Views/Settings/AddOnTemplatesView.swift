@@ -80,7 +80,7 @@ struct AddOnTemplatesView: View {
         .frame(maxWidth: .infinity, alignment: .center)
         .padding()
         .background(CoolGradientBackground())
-        .navigationTitle("Add-On Templates")
+        .navigationTitle("Additional Equipment Templates")
         .sheet(isPresented: $showingEditor) {
             if let binding = bindingForTemplate(editTemplate?.id) {
                 AddOnTemplateEditor(template: binding, isNew: false, onSave: nil)
@@ -137,7 +137,7 @@ struct AddOnTemplateEditor: View {
                     Toggle("Free when Best selected", isOn: $template.freeWhenTierIsBest)
                 }
             }
-            .navigationTitle(isNew ? "New Add-On Template" : "Edit Add-On Template")
+            .navigationTitle(isNew ? "New Additional Equipment Template" : "Edit Additional Equipment Template")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

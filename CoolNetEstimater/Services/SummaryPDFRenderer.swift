@@ -86,7 +86,7 @@ class SummaryPDFRenderer {
             
             textOrigin.y += 8
             drawLine("Systems Subtotal: $\(Int(estimate.systemsSubtotal))")
-            drawLine("Add-ons Subtotal: $\(Int(estimate.addOnsSubtotal))")
+            drawLine("Additional Equipment Subtotal: $\(Int(estimate.addOnsSubtotal))")
             drawLine("TOTAL INVESTMENT: $\(Int(estimate.grandTotal))", font: .systemFont(ofSize: 14, weight: .bold))
             
             if let data = estimate.customerSignatureImageData,

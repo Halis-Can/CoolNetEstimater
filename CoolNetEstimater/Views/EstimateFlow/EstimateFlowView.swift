@@ -459,8 +459,19 @@ private func displayName(for type: EquipmentType) -> String {
 
 private struct SystemOptionsScreen: View {
     @EnvironmentObject var estimateVM: EstimateViewModel
+    @AppStorage("tier_good_visible") private var tierGoodVisible: Bool = true
+    @AppStorage("tier_better_visible") private var tierBetterVisible: Bool = true
+    @AppStorage("tier_best_visible") private var tierBestVisible: Bool = true
     let next: () -> Void
     let back: () -> Void
+    
+    private var visibleTiers: Set<Tier> {
+        var s = Set<Tier>()
+        if tierGoodVisible { s.insert(.good) }
+        if tierBetterVisible { s.insert(.better) }
+        if tierBestVisible { s.insert(.best) }
+        return s
+    }
     
     var body: some View {
         ScrollView {
@@ -488,8 +499,7 @@ private struct SystemOptionsScreen: View {
     }
     
     private func filteredOptions(for system: EstimateSystem) -> [SystemOption] {
-        // Always show all tiers for every system/tonnage as requested
-        return system.options
+        return system.options.filter { visibleTiers.contains($0.tier) }
     }
 }
 
@@ -576,7 +586,7 @@ private struct OptionEditableRow: View {
     }
 }
 
-// MARK: - Add-Ons
+// MARK: - Additional Equipment
 
 private struct AdditionalEquipmentScreen: View {
     @EnvironmentObject var estimateVM: EstimateViewModel

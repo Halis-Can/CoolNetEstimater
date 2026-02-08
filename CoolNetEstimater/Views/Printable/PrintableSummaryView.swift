@@ -7,6 +7,23 @@ import SwiftUI
 
 struct PrintableSummaryView: View {
     let estimate: Estimate
+    @AppStorage("tier_good_visible") private var tierGoodVisible: Bool = true
+    @AppStorage("tier_better_visible") private var tierBetterVisible: Bool = true
+    @AppStorage("tier_best_visible") private var tierBestVisible: Bool = true
+    
+    private var visibleTiers: [(Tier, String, Color)] {
+        [Tier.good, .better, .best].compactMap { tier in
+            let visible: Bool
+            let title: String
+            let color: Color
+            switch tier {
+            case .good: visible = tierGoodVisible; title = "Good"; color = .blue
+            case .better: visible = tierBetterVisible; title = "Better"; color = .purple
+            case .best: visible = tierBestVisible; title = "Best"; color = .pink
+            }
+            return visible ? (tier, title, color) : nil
+        }
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -36,11 +53,11 @@ struct PrintableSummaryView: View {
                 LabeledRow(label: "Phone:", value: estimate.phone)
                 LabeledRow(label: "Email:", value: estimate.email)
             }
-            // Proposal Cards in three columns if space allows; print layout: vertical stack
+            // Proposal Cards for visible tiers only
             VStack(alignment: .leading, spacing: 12) {
-                ProposalCard(tier: .good, title: "Good", estimate: estimate, color: .blue)
-                ProposalCard(tier: .better, title: "Better", estimate: estimate, color: .purple)
-                ProposalCard(tier: .best, title: "Best", estimate: estimate, color: .pink)
+                ForEach(visibleTiers, id: \.0.rawValue) { tier, title, color in
+                    ProposalCard(tier: tier, title: title, estimate: estimate, color: color)
+                }
             }
             // Signature small box
             HStack {
@@ -144,7 +161,7 @@ struct PrintableSummaryView: View {
                         Text(formatCurrencyPrintable(optionSum))
                     }
                     HStack {
-                        Text("Add-Ons Subtotal")
+                        Text("Additional Equipment Subtotal")
                         Spacer()
                         Text(formatCurrencyPrintable(addOnsSubtotal))
                     }

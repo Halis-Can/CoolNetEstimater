@@ -151,7 +151,7 @@ struct EstimateView: View {
                 }
             }
             
-            Section("Add-Ons") {
+            Section("Additional Equipment") {
                 ForEach(estimateVM.currentEstimate.addOns) { addon in
                     HStack {
                         Toggle(isOn: bindingForAddOnEnabled(addon.id)) {
@@ -191,7 +191,7 @@ struct EstimateView: View {
                     Text(formatCurrency(estimateVM.currentEstimate.systemsSubtotal))
                 }
                 HStack {
-                    Text("Add-Ons Subtotal")
+                    Text("Additional Equipment Subtotal")
                     Spacer()
                     Text(formatCurrency(estimateVM.currentEstimate.addOnsSubtotal))
                 }
@@ -234,27 +234,26 @@ struct EstimateView: View {
                 SystemDetailView(system: system)
             }
         }
+        .navigationDestination(for: SelectedOptionDestination.self) { dest in
+            SelectedOptionFullPageView(systemId: dest.systemId, optionId: dest.optionId)
+                .environmentObject(estimateVM)
+        }
     }
     
     private var detailPane: some View {
-        VStack(spacing: 16) {
-            Text("Capture Signature")
-                .font(.headline)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(spacing: 12) {
+            Image(systemName: "doc.text")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+            Text("Estimate")
+                .font(.title2)
+            Text("Select a system from the list or add systems and options above.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
                 .padding(.horizontal)
-            
-            SignatureView(signatureData: Binding(
-                get: { estimateVM.currentEstimate.customerSignatureImageData },
-                set: { newData in
-                    estimateVM.currentEstimate.customerSignatureImageData = newData
-                    estimateVM.recalculateTotals()
-                }
-            ))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(UIColor.secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .padding()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     private func binding<T>(_ keyPath: WritableKeyPath<Estimate, T>) -> Binding<T> {
@@ -278,22 +277,63 @@ struct EstimateView: View {
     }
 }
 
+// MARK: - Navigation to selected option full page
+
+private struct SelectedOptionDestination: Hashable {
+    let systemId: UUID
+    let optionId: UUID
+}
+
 // MARK: - Subviews
 
 private struct SystemDetailView: View {
     @EnvironmentObject var estimateVM: EstimateViewModel
+    @AppStorage("tier_good_visible") private var tierGoodVisible: Bool = true
+    @AppStorage("tier_better_visible") private var tierBetterVisible: Bool = true
+    @AppStorage("tier_best_visible") private var tierBestVisible: Bool = true
     let system: EstimateSystem
     
+    private var visibleTiers: Set<Tier> {
+        var s = Set<Tier>()
+        if tierGoodVisible { s.insert(.good) }
+        if tierBetterVisible { s.insert(.better) }
+        if tierBestVisible { s.insert(.best) }
+        return s
+    }
+    
+    private var currentSystem: EstimateSystem {
+        estimateVM.currentEstimate.systems.first(where: { $0.id == system.id }) ?? system
+    }
+
+    private var selectedOption: SystemOption? {
+        currentSystem.options.first(where: { $0.isSelectedByCustomer })
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 systemHeader
                 optionsRow
+                if selectedOption != nil {
+                    nextButton
+                }
                 existingSystemForm
             }
             .padding()
         }
         .navigationTitle(system.name)
+    }
+
+    private var nextButton: some View {
+        NavigationLink(value: SelectedOptionDestination(systemId: system.id, optionId: selectedOption!.id)) {
+            Text("Next")
+                .font(.title2)
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+        }
+        .buttonStyle(.borderedProminent)
+        .padding(.vertical, 8)
     }
     
     private var systemHeader: some View {
@@ -323,7 +363,7 @@ private struct SystemDetailView: View {
             Text("Options").font(.headline)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
-                    ForEach(system.options) { option in
+                    ForEach(system.options.filter { visibleTiers.contains($0.tier) }) { option in
                         SystemOptionCard(option: option, isSelected: option.isSelectedByCustomer) {
                             estimateVM.selectOption(systemId: system.id, optionId: option.id)
                         }
@@ -398,59 +438,154 @@ private struct SystemDetailView: View {
     }
 }
 
+private struct SelectedOptionFullPageView: View {
+    @EnvironmentObject var estimateVM: EstimateViewModel
+    let systemId: UUID
+    let optionId: UUID
+
+    private var system: EstimateSystem? {
+        estimateVM.currentEstimate.systems.first(where: { $0.id == systemId })
+    }
+
+    private var option: SystemOption? {
+        system?.options.first(where: { $0.id == optionId })
+    }
+
+    var body: some View {
+        Group {
+            if let system = system, let option = option {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        Text(system.name)
+                            .font(.title)
+                            .bold()
+                            .padding(.horizontal)
+                        SelectedOptionFullCard(option: option)
+                            .padding(.horizontal)
+                    }
+                    .padding(.vertical, 24)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(UIColor.systemGroupedBackground))
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "questionmark.circle")
+                        .font(.largeTitle)
+                        .foregroundStyle(.secondary)
+                    Text("Option not found")
+                        .font(.headline)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .navigationTitle(option?.tier.displayName ?? "Selected Option")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct SelectedOptionFullCard: View {
+    let option: SystemOption
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text(option.tier.displayName)
+                    .font(.title2)
+                    .bold()
+                Spacer()
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .font(.title2)
+            }
+            TierOptionPhotoView(tier: option.tier, height: 220, fallbackSymbol: option.imageName ?? "shippingbox")
+            Text("\(option.seer, specifier: "%.0f") SEER • \(option.stage)")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+            if !option.advantages.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(option.advantages, id: \.self) { adv in
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "checkmark.seal")
+                                .foregroundStyle(.green)
+                            Text(adv)
+                                .font(.body)
+                        }
+                    }
+                }
+            }
+            Text(formatCurrency(option.price))
+                .font(.title)
+                .bold()
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+}
+
 private struct SystemOptionCard: View {
     let option: SystemOption
     let isSelected: Bool
     let onSelect: () -> Void
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(option.tier.displayName)
-                    .font(.headline)
-                Spacer()
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                }
-            }
-            .padding(.bottom, 4)
-            
-            TierOptionPhotoView(tier: option.tier, height: 140, fallbackSymbol: option.imageName ?? "shippingbox")
-            
-            Text("\(option.seer, specifier: "%.0f") SEER • \(option.stage)")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            
-            if !option.advantages.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(option.advantages.prefix(3), id: \.self) { adv in
-                        HStack(spacing: 6) {
-                            Image(systemName: "checkmark.seal")
-                            Text(adv)
-                        }
-                        .font(.caption)
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(option.tier.displayName)
+                        .font(.headline)
+                    Spacer()
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
                     }
                 }
-                .padding(.vertical, 4)
-            }
-            
-            HStack {
-                Text(formatCurrency(option.price))
-                    .font(.title3).bold()
-                Spacer()
-                Button(action: onSelect) {
-                    Text(isSelected ? "Selected" : "Select")
-                        .frame(maxWidth: 120)
+                .padding(.bottom, 4)
+                
+                TierOptionPhotoView(tier: option.tier, height: 140, fallbackSymbol: option.imageName ?? "shippingbox")
+                
+                Text("\(option.seer, specifier: "%.0f") SEER • \(option.stage)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                
+                if !option.advantages.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(option.advantages.prefix(3), id: \.self) { adv in
+                            HStack(spacing: 6) {
+                                Image(systemName: "checkmark.seal")
+                                Text(adv)
+                            }
+                            .font(.caption)
+                        }
+                    }
+                    .padding(.vertical, 4)
                 }
-                .buttonStyle(.borderedProminent)
+                
+                HStack {
+                    Text(formatCurrency(option.price))
+                        .font(.title3).bold()
+                    Spacer()
+                    Text(isSelected ? "Selected" : "Select")
+                        .font(.subheadline)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(isSelected ? Color.green.opacity(0.3) : Color.accentColor.opacity(0.2))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
             }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(isSelected ? Color.primary.opacity(0.15) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isSelected ? Color.green : Color(UIColor.separator), lineWidth: isSelected ? 3 : 1)
+            )
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(isSelected ? Color.green : Color(UIColor.separator), lineWidth: isSelected ? 2 : 1)
-        )
+        .buttonStyle(.plain)
     }
 }
 
@@ -484,7 +619,7 @@ private struct AddOnTemplatePicker: View {
                     }
                 }
             }
-            .navigationTitle("Add-On Templates")
+            .navigationTitle("Additional Equipment Templates")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
