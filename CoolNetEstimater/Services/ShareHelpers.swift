@@ -44,6 +44,76 @@ struct ActivityView: View {
 }
 
 #if os(iOS)
+/// Pencere kökünden paylaşım açar; sheet kullanmaz. PDF/Mail/Text düzgün gönderilir (iPhone + iPad).
+enum SharePresenter {
+    static func keyWindowTopViewController() -> UIViewController? {
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+        let window = scene?.windows.first { $0.isKeyWindow } ?? scene?.windows.first
+        var top = window?.rootViewController
+        while let presented = top?.presentedViewController { top = presented }
+        return top
+    }
+    
+    static func presentActivitySheet(activityItems: [Any], from barButtonItem: UIBarButtonItem? = nil) {
+        guard let top = keyWindowTopViewController() else { return }
+        let vc = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        vc.excludedActivityTypes = []
+        if let pop = vc.popoverPresentationController {
+            if let item = barButtonItem {
+                pop.barButtonItem = item
+            } else {
+                pop.sourceView = top.view
+                pop.sourceRect = CGRect(x: top.view.bounds.midX, y: top.view.bounds.midY, width: 1, height: 1)
+                pop.permittedArrowDirections = []
+            }
+        }
+        top.present(vc, animated: true)
+    }
+    
+    static func presentMail(subject: String, recipients: [String], body: String, attachmentData: Data, attachmentName: String) {
+        guard MFMailComposeViewController.canSendMail(),
+              let top = keyWindowTopViewController() else { return }
+        let vc = MFMailComposeViewController()
+        vc.setSubject(subject)
+        vc.setToRecipients(recipients.isEmpty ? [] : recipients)
+        vc.setMessageBody(body, isHTML: false)
+        vc.addAttachmentData(attachmentData, mimeType: "application/pdf", fileName: attachmentName)
+        vc.mailComposeDelegate = MailComposeDelegate.shared
+        MailComposeDelegate.shared.onDismiss = { MailComposeDelegate.shared.onDismiss = nil }
+        top.present(vc, animated: true)
+    }
+    
+    static func presentMessage(recipients: [String], body: String, attachmentData: Data, attachmentName: String) {
+        guard MFMessageComposeViewController.canSendText(),
+              let top = keyWindowTopViewController() else { return }
+        let vc = MFMessageComposeViewController()
+        vc.recipients = recipients
+        vc.body = body
+        vc.addAttachmentData(attachmentData, typeIdentifier: "com.adobe.pdf", filename: attachmentName)
+        vc.messageComposeDelegate = MessageComposeDelegate.shared
+        MessageComposeDelegate.shared.onDismiss = { MessageComposeDelegate.shared.onDismiss = nil }
+        top.present(vc, animated: true)
+    }
+}
+
+private final class MailComposeDelegate: NSObject, MFMailComposeViewControllerDelegate {
+    static let shared = MailComposeDelegate()
+    var onDismiss: (() -> Void)?
+    func mailComposeController(_ controller: MFMailComposeViewController, didFinishWith result: MFMailComposeResult, error: Error?) {
+        controller.dismiss(animated: true) { [weak self] in self?.onDismiss?() }
+    }
+}
+
+private final class MessageComposeDelegate: NSObject, MFMessageComposeViewControllerDelegate {
+    static let shared = MessageComposeDelegate()
+    var onDismiss: (() -> Void)?
+    func messageComposeViewController(_ controller: MFMessageComposeViewController, didFinishWith result: MessageComposeResult) {
+        controller.dismiss(animated: true) { [weak self] in self?.onDismiss?() }
+    }
+}
+
 /// Presents UIActivityViewController. On iPad uses popover (required by system); calls onDismiss when done so the sheet can close.
 struct ActivityView_iOS: UIViewControllerRepresentable {
     let activityItems: [Any]

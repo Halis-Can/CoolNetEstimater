@@ -1041,10 +1041,6 @@ struct DecisionOptionPageView: View {
     @AppStorage("company_address") private var companyAddress: String = ""
     @AppStorage("company_license") private var companyLicense: String = ""
     @AppStorage("company_website") private var companyWebsite: String = ""
-    @State private var showingActivity = false
-    @State private var showingMail = false
-    @State private var showingMessage = false
-    @State private var pdfData: Data?
     @State private var docuSignError: String?
     @ObservedObject private var docuSignService = DocuSignService.shared
     
@@ -1270,43 +1266,6 @@ struct DecisionOptionPageView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showingActivity) {
-                if let data = pdfData {
-                    ActivityView(activityItems: [data, "Estimate.pdf"], onDismiss: { showingActivity = false })
-                } else {
-                    ProgressView("Preparing PDF…")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
-            #if canImport(MessageUI)
-            .sheet(isPresented: $showingMail) {
-                if let data = pdfData {
-                    MailComposerView(
-                        subject: "Your Estimate",
-                        recipients: estimateVM.currentEstimate.email.isEmpty ? [] : [estimateVM.currentEstimate.email],
-                        messageBody: "Please find your estimate attached.",
-                        attachments: [(data, "application/pdf", "Estimate.pdf")],
-                        onDismiss: { showingMail = false }
-                    )
-                } else {
-                    ProgressView("Preparing…")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
-            .sheet(isPresented: $showingMessage) {
-                if let data = pdfData {
-                    MessageComposerView(
-                        recipients: estimateVM.currentEstimate.phone.isEmpty ? [] : [estimateVM.currentEstimate.phone],
-                        messageBody: "Your estimate is attached.",
-                        attachments: [(data, "com.adobe.pdf", "Estimate.pdf")],
-                        onDismiss: { showingMessage = false }
-                    )
-                } else {
-                    ProgressView("Preparing…")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
-            #endif
         }
     }
     
@@ -1580,24 +1539,24 @@ struct DecisionOptionPageView: View {
             Text("Share")
                 .font(.headline)
             HStack(spacing: 12) {
+                #if os(iOS)
                 Button {
                     let data = EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
-                    pdfData = data
-                    DispatchQueue.main.async {
-                        showingActivity = true
-                    }
+                    SharePresenter.presentActivitySheet(activityItems: [data, "Estimate.pdf"])
                 } label: {
                     Label("PDF", systemImage: "doc.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                #if os(iOS)
                 Button {
                     let data = EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
-                    pdfData = data
-                    DispatchQueue.main.async {
-                        showingMail = true
-                    }
+                    SharePresenter.presentMail(
+                        subject: "Your Estimate",
+                        recipients: estimateVM.currentEstimate.email.isEmpty ? [] : [estimateVM.currentEstimate.email],
+                        body: "Please find your estimate attached.",
+                        attachmentData: data,
+                        attachmentName: "Estimate.pdf"
+                    )
                 } label: {
                     Label("Email", systemImage: "envelope.fill")
                         .frame(maxWidth: .infinity)
@@ -1606,39 +1565,18 @@ struct DecisionOptionPageView: View {
                 .disabled(!MFMailComposeViewController.canSendMail())
                 Button {
                     let data = EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
-                    pdfData = data
-                    DispatchQueue.main.async {
-                        showingMessage = true
-                    }
+                    SharePresenter.presentMessage(
+                        recipients: estimateVM.currentEstimate.phone.isEmpty ? [] : [estimateVM.currentEstimate.phone],
+                        body: "Your estimate is attached.",
+                        attachmentData: data,
+                        attachmentName: "Estimate.pdf"
+                    )
                 } label: {
                     Label("Text", systemImage: "message.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(!MFMessageComposeViewController.canSendText())
-                #else
-                Button {
-                    let data = EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
-                    pdfData = data
-                    DispatchQueue.main.async {
-                        showingMail = true
-                    }
-                } label: {
-                    Label("Email", systemImage: "envelope.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                Button {
-                    let data = EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
-                    pdfData = data
-                    DispatchQueue.main.async {
-                        showingMessage = true
-                    }
-                } label: {
-                    Label("Text", systemImage: "message.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
                 #endif
             }
         }
