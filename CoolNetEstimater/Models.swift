@@ -208,6 +208,7 @@ struct Estimate: Identifiable, Codable {
     var grandTotal: Double
     
     var customerSignatureImageData: Data?
+    var customerSignatureDate: Date?
     
     init(
         id: UUID = UUID(),
@@ -223,7 +224,8 @@ struct Estimate: Identifiable, Codable {
         systemsSubtotal: Double = 0,
         addOnsSubtotal: Double = 0,
         grandTotal: Double = 0,
-        customerSignatureImageData: Data? = nil
+        customerSignatureImageData: Data? = nil,
+        customerSignatureDate: Date? = nil
     ) {
         self.id = id
         self.estimateDate = estimateDate
@@ -239,6 +241,7 @@ struct Estimate: Identifiable, Codable {
         self.addOnsSubtotal = addOnsSubtotal
         self.grandTotal = grandTotal
         self.customerSignatureImageData = customerSignatureImageData
+        self.customerSignatureDate = customerSignatureDate
     }
 }
 

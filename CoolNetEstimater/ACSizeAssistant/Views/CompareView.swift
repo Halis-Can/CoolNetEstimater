@@ -19,23 +19,11 @@ struct CompareView: View {
         case heatPump = "Heat Pump"
         var id: String { rawValue }
         
-        var imageName: String {
+        var baseImageName: String {
             switch self {
             case .ac: return "CompareAC"
             case .furnace: return "CompareFurnace"
             case .heatPump: return "CompareHeatPump"
-            }
-        }
-        
-        // Try multiple common asset names to be forgiving about naming
-        var candidateAssetNames: [String] {
-            switch self {
-            case .ac:
-                return ["CompareAC", "compareac", "AC", "Ac", "ac", "AirConditioner", "Air_Conditioner", "AC_Image"]
-            case .furnace:
-                return ["CompareFurnace", "comparefurnace", "Furnace", "furnace", "Furnace_Image"]
-            case .heatPump:
-                return ["CompareHeatPump", "compareheatpump", "HeatPump", "Heat_Pump", "heatpump", "HeatPump_Image"]
             }
         }
         
@@ -48,7 +36,34 @@ struct CompareView: View {
         }
     }
     
+    enum Tier: String, CaseIterable, Identifiable {
+        case good = "Good"
+        case better = "Better"
+        case best = "Best"
+        var id: String { rawValue }
+    }
+    
+    // For each Kind+Tier, try tier-specific asset first, then fall back to base
+    private func candidateAssetNames(for kind: Kind, tier: Tier) -> [String] {
+        let base = kind.baseImageName
+        let tierSuffix: String = {
+            switch tier {
+            case .good: return "Good"
+            case .better: return "Better"
+            case .best: return "Best"
+            }
+        }()
+        return [
+            "\(base)\(tierSuffix)",
+            "\(base)_\(tierSuffix)",
+            base,
+            base.lowercased(),
+            base.replacingOccurrences(of: "Compare", with: ""),
+        ]
+    }
+    
     @State private var selection: Kind = .ac
+    @State private var tierSelection: Tier = .good
     // Optional per-kind override so you can type the exact asset name if needed
     @AppStorage("CompareACImageName") private var customACName: String = ""
     @AppStorage("CompareFurnaceImageName") private var customFurnaceName: String = ""
@@ -62,9 +77,18 @@ struct CompareView: View {
     
     var body: some View {
         VStack(spacing: 16) {
+            // Equipment type: AC, Furnace, Heat Pump
             Picker("Compare", selection: $selection) {
                 ForEach(Kind.allCases) { k in
                     Text(k.rawValue).tag(k)
+                }
+            }
+            .pickerStyle(.segmented)
+            
+            // Tier: Good, Better, Best (for selected equipment type)
+            Picker("Tier", selection: $tierSelection) {
+                ForEach(Tier.allCases) { t in
+                    Text(t.rawValue).tag(t)
                 }
             }
             .pickerStyle(.segmented)
@@ -75,7 +99,7 @@ struct CompareView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                TextField("e.g. CompareAC", text: customNameBinding)
+                TextField("e.g. CompareACGood", text: customNameBinding)
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: 280)
             }
@@ -83,11 +107,11 @@ struct CompareView: View {
             Card {
                 VStack(spacing: 12) {
                     HStack {
-                        Text(selection.rawValue)
+                        Text("\(selection.rawValue) — \(tierSelection.rawValue)")
                             .font(.headline)
                         Spacer()
                     }
-					if let name = firstExistingImageName(for: selection, custom: currentCustomName) {
+					if let name = firstExistingImageName(for: selection, tier: tierSelection, custom: currentCustomName) {
 						Group {
 							#if os(iOS)
 							if let ui = UIImage(named: name) {
@@ -126,10 +150,11 @@ struct CompareView: View {
                             Image(systemName: selection.fallbackSymbol)
                                 .font(.system(size: 64, weight: .semibold))
                                 .foregroundStyle(.blue)
-                            Text("Add an asset named “\(selection.imageName)” (or common variants) or set a custom name above.")
+                            Text("Add an asset named “\(selection.baseImageName)\(tierSelection.rawValue)” (e.g. CompareACGood, CompareFurnaceBetter) or set a custom name above.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                            Text("Tried: \(attemptedNames(for: selection, custom: currentCustomName).joined(separator: ", "))")
+                                .multilineTextAlignment(.center)
+                            Text("Tried: \(attemptedNames(for: selection, tier: tierSelection, custom: currentCustomName).joined(separator: ", "))")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
@@ -191,19 +216,18 @@ struct CompareView: View {
         }
     }
     
-    private func attemptedNames(for kind: Kind, custom: String?) -> [String] {
+    private func attemptedNames(for kind: Kind, tier: Tier, custom: String?) -> [String] {
         var names: [String] = []
         if let custom, !custom.isEmpty {
             names.append(custom)
         }
-        names.append(contentsOf: kind.candidateAssetNames)
-        // Deduplicate while keeping order
+        names.append(contentsOf: candidateAssetNames(for: kind, tier: tier))
         var seen = Set<String>()
         return names.filter { seen.insert($0).inserted }
     }
     
-    private func firstExistingImageName(for kind: Kind, custom: String?) -> String? {
-        for name in attemptedNames(for: kind, custom: custom) {
+    private func firstExistingImageName(for kind: Kind, tier: Tier, custom: String?) -> String? {
+        for name in attemptedNames(for: kind, tier: tier, custom: custom) {
             #if os(iOS)
             if UIImage(named: name) != nil {
                 return name

@@ -6,6 +6,7 @@
 import SwiftUI
 #if os(iOS)
 import MessageUI
+import UIKit
 #endif
 
 private let creditCardFeePercent: Double = 3.5
@@ -45,9 +46,7 @@ struct FinalSummaryView: View {
                                 headerView(title: "Estimate")
                                 customerSection
                                 SystemSummaryPage(system: sys, index: idx, visibleTiers: tiersVisibleInSettings, selectedTier: $selectedTierForNext)
-                                if selectedTierForNext != nil {
-                                    nextOptionsButton
-                                }
+                                nextOptionsButton
                             }
                             .frame(maxWidth: 900)
                             .frame(maxWidth: .infinity, alignment: .center)
@@ -60,9 +59,7 @@ struct FinalSummaryView: View {
                             headerView(title: "Estimate Totals")
                             customerSection
                             totalsComparisonSection(selectedTier: $selectedTierForNext)
-                            if selectedTierForNext != nil {
-                                nextOptionsButton
-                            }
+                            nextOptionsButton
                         }
                         .frame(maxWidth: 900)
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -79,9 +76,7 @@ struct FinalSummaryView: View {
                         if let only = enabledSystems.first {
                             SystemSummaryPage(system: only, index: 0, visibleTiers: tiersVisibleInSettings, selectedTier: $selectedTierForNext)
                         }
-                        if selectedTierForNext != nil {
-                            nextOptionsButton
-                        }
+                        nextOptionsButton
                     }
                     .frame(maxWidth: 900)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -115,13 +110,21 @@ struct FinalSummaryView: View {
         Button {
             showingDecisionPage = true
         } label: {
-            Text("Next Options")
-                .font(.title2)
-                .fontWeight(.semibold)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
+            HStack(spacing: 8) {
+                if selectedTierForNext != nil {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.white)
+                }
+                Text("Final Selection")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
         }
         .buttonStyle(.borderedProminent)
+        .disabled(selectedTierForNext == nil)
+        .opacity(selectedTierForNext != nil ? 1 : 0.6)
         .frame(maxWidth: 400)
         .frame(maxWidth: .infinity)
     }
@@ -132,9 +135,9 @@ struct FinalSummaryView: View {
     
     private func headerView(title: String) -> some View {
         HStack(alignment: .center, spacing: 16) {
-            // Logo on the top-left
-            AppLogoHeader(height: 60)
-                .frame(maxWidth: 200, alignment: .leading)
+            // Logo on the top-left (%40 larger)
+            AppLogoHeader(height: 84)
+                .frame(maxWidth: 280, alignment: .leading)
             
             Spacer()
             
@@ -1029,7 +1032,8 @@ struct FinalSummaryView: View {
 // MARK: - Decision page (selected option only, no Good/Better/Best label)
 struct DecisionOptionPageView: View {
     let tier: Tier
-    let onDismiss: () -> Void
+    var onDismiss: (() -> Void)? = nil
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var estimateVM: EstimateViewModel
     @AppStorage("payment_option") private var paymentOptionRaw: String = PaymentOption.cashCheckZelle.rawValue
     @AppStorage("finance_markup_percent") private var financeMarkupPercent: Double = 0.0
@@ -1042,7 +1046,16 @@ struct DecisionOptionPageView: View {
     @AppStorage("company_license") private var companyLicense: String = ""
     @AppStorage("company_website") private var companyWebsite: String = ""
     @State private var docuSignError: String?
+    @State private var showThankYouSheet = false
     @ObservedObject private var docuSignService = DocuSignService.shared
+    
+    private var isSigned: Bool {
+        estimateVM.currentEstimate.customerSignatureImageData != nil
+    }
+    
+    private var isApproved: Bool {
+        estimateVM.currentEstimate.status == .approved
+    }
     
     // Show the option for the tier user selected on Final Summary (don't require isSelectedByCustomer)
     private var systemsWithOption: [(EstimateSystem, SystemOption)] {
@@ -1165,6 +1178,9 @@ struct DecisionOptionPageView: View {
                     selectionPageHeaderRow
                     selectionPageCustomerRow
                     
+                    // Locked notice for customer: read-only, sign below to approve
+                    selectionLockedNotice
+                    
                     // High-quality tier system picture(s)
                     tierHeroSection
                     
@@ -1242,7 +1258,10 @@ struct DecisionOptionPageView: View {
                     // Signature section
                     signatureSection
                     
-                    // Share (Text / Mail / PDF)
+                    // Approve button (after sign) or green Approved (after approval)
+                    approveOrApprovedSection
+                    
+                    // Send (PDF / Email / Text) — for customer to send signed estimate
                     shareSection
                 }
                 .padding(24)
@@ -1262,18 +1281,80 @@ struct DecisionOptionPageView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
-                        onDismiss()
+                        if let onDismiss {
+                            onDismiss()
+                        } else {
+                            dismiss()
+                        }
                     }
                 }
+            }
+            .fullScreenCover(isPresented: $showThankYouSheet) {
+                ThankYouNextStepsView(onDismiss: { showThankYouSheet = false })
             }
         }
     }
     
-    // Same design as Estimate page: logo left, estimate # and date right
+    private var selectionLockedNotice: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "lock.shield.fill")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+            Text("This selection is locked. Sign below to approve, then tap Approve to confirm. You may send the signed estimate to your contractor.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(UIColor.tertiarySystemFill))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+    
+    private var approveOrApprovedSection: some View {
+        Group {
+            if isApproved {
+                Button {
+                    showThankYouSheet = true
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.title2)
+                        Text("Approved")
+                            .font(.title3.bold())
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.green)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+            } else if isSigned {
+                Button {
+                    estimateVM.approveEstimate()
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "checkmark.circle")
+                            .font(.title2)
+                        Text("Approve")
+                            .font(.title3.bold())
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.accentColor)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+    
+    // Same design as Estimate page: logo left, estimate # and date right (%40 larger logo)
     private var selectionPageHeaderRow: some View {
         HStack(alignment: .center, spacing: 16) {
-            AppLogoHeader(height: 60)
-                .frame(maxWidth: 200, alignment: .leading)
+            AppLogoHeader(height: 84)
+                .frame(maxWidth: 280, alignment: .leading)
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 Text("Estimate # \(estimateVM.currentEstimate.estimateNumber.isEmpty ? "—" : estimateVM.currentEstimate.estimateNumber)")
@@ -1482,62 +1563,136 @@ struct DecisionOptionPageView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Signature")
                 .font(.headline)
-            SignatureView(signatureData: Binding(
-                get: { estimateVM.currentEstimate.customerSignatureImageData },
-                set: { newData in
-                    estimateVM.currentEstimate.customerSignatureImageData = newData
-                    estimateVM.recalculateTotals()
-                    if newData != nil {
-                        estimateVM.approveEstimate()
+            if isSigned {
+                // Signed: show image only, no re-sign. Show name and date.
+                VStack(alignment: .leading, spacing: 12) {
+                    if let data = estimateVM.currentEstimate.customerSignatureImageData {
+                        signatureImageFromData(data)
                     }
-                }
-            ))
-            .frame(maxWidth: .infinity)
-            .frame(height: 140)
-            .background(Color(UIColor.secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color(UIColor.separator), lineWidth: 1)
-            )
-            Button {
-                let pdf = EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
-                docuSignService.startSigning(
-                    estimate: estimateVM.currentEstimate,
-                    pdfData: pdf,
-                    onSigned: { signedData in
-                        if let data = signedData {
-                            estimateVM.currentEstimate.customerSignatureImageData = data
-                            estimateVM.recalculateTotals()
-                            estimateVM.approveEstimate()
+                    HStack(spacing: 24) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Name")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(estimateVM.currentEstimate.customerName.isEmpty ? "—" : estimateVM.currentEstimate.customerName)
+                                .font(.subheadline.bold())
                         }
-                    },
-                    onError: { message in
-                        docuSignError = message
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Date")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(signatureDateText)
+                                .font(.subheadline.bold())
+                        }
+                        Spacer(minLength: 0)
                     }
+                    .padding(12)
+                    .background(Color(UIColor.tertiarySystemFill))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+            } else {
+                // Not signed: show pad and DocuSign. Label who is signing.
+                Text("Signing as: \(estimateVM.currentEstimate.customerName.isEmpty ? "Customer" : estimateVM.currentEstimate.customerName)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                SignatureView(signatureData: Binding(
+                    get: { estimateVM.currentEstimate.customerSignatureImageData },
+                    set: { newData in
+                        estimateVM.currentEstimate.customerSignatureImageData = newData
+                        if newData != nil {
+                            estimateVM.currentEstimate.customerSignatureDate = Date()
+                        }
+                        estimateVM.recalculateTotals()
+                    }
+                ))
+                .frame(maxWidth: .infinity)
+                .frame(height: 140)
+                .background(Color(UIColor.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color(UIColor.separator), lineWidth: 1)
                 )
-            } label: {
-                Label("Sign with DocuSign", systemImage: "signature")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .alert("DocuSign", isPresented: Binding(
-                get: { docuSignError != nil },
-                set: { if !$0 { docuSignError = nil } }
-            )) {
-                Button("OK", role: .cancel) { docuSignError = nil }
-            } message: {
-                if let msg = docuSignError {
-                    Text(msg)
+                Button {
+                    let pdf = EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
+                    docuSignService.startSigning(
+                        estimate: estimateVM.currentEstimate,
+                        pdfData: pdf,
+                        onSigned: { signedData in
+                            if let data = signedData {
+                                estimateVM.currentEstimate.customerSignatureImageData = data
+                                estimateVM.currentEstimate.customerSignatureDate = Date()
+                                estimateVM.recalculateTotals()
+                            }
+                        },
+                        onError: { message in
+                            docuSignError = message
+                        }
+                    )
+                } label: {
+                    Label("Sign with DocuSign", systemImage: "signature")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .alert("DocuSign", isPresented: Binding(
+                    get: { docuSignError != nil },
+                    set: { if !$0 { docuSignError = nil } }
+                )) {
+                    Button("OK", role: .cancel) { docuSignError = nil }
+                } message: {
+                    if let msg = docuSignError {
+                        Text(msg)
+                    }
                 }
             }
         }
     }
     
+    private var signatureDateText: String {
+        let date = estimateVM.currentEstimate.customerSignatureDate ?? estimateVM.currentEstimate.estimateDate
+        return date.formatted(date: .long, time: .omitted)
+    }
+    
+    @ViewBuilder
+    private func signatureImageFromData(_ data: Data) -> some View {
+        #if os(iOS)
+        if let uiImage = UIImage(data: data) {
+            Image(uiImage: uiImage)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .frame(height: 120)
+                .background(Color(UIColor.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color(UIColor.separator), lineWidth: 1)
+                )
+        }
+        #elseif os(macOS)
+        if let nsImage = NSImage(data: data) {
+            Image(nsImage: nsImage)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .frame(height: 120)
+                .background(Color(NSColor.windowBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.primary.opacity(0.2), lineWidth: 1)
+                )
+        }
+        #endif
+    }
+    
     private var shareSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Share")
+            Text("Send")
                 .font(.headline)
+            Text("Share the signed estimate via PDF, email, or text.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             HStack(spacing: 12) {
                 #if os(iOS)
                 Button {
@@ -1587,6 +1742,83 @@ struct DecisionOptionPageView: View {
             return "\(Int(sys.tonnage).formatted(.number.grouping(.automatic))) BTU"
         }
         return formatTonnage(sys.tonnage)
+    }
+}
+
+// MARK: - Thank you & next steps (after customer approval)
+struct ThankYouNextStepsView: View {
+    var onDismiss: () -> Void
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 56))
+                        .foregroundStyle(.green)
+                        .frame(maxWidth: .infinity)
+                    
+                    Text("Thank You for Your Trust")
+                        .font(.title.bold())
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                    
+                    Text("By approving this estimate, you have chosen to move forward with your new HVAC system. We are grateful for your confidence in us and look forward to serving you.")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                    
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("What Happens Next")
+                            .font(.headline)
+                        
+                        nextStepRow(number: 1, title: "Order", detail: "We will place the order for your equipment and schedule your installation.")
+                        nextStepRow(number: 2, title: "Installation", detail: "Our team will install your new system with care and professionalism.")
+                        nextStepRow(number: 3, title: "Start-Up & Handoff", detail: "We will start up your system, verify performance, and walk you through operation and maintenance.")
+                    }
+                    .padding()
+                    .background(Color(UIColor.secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    
+                    Text("If you have any questions, please reach out. We are here to help.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                }
+                .padding(24)
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("You're All Set")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        onDismiss()
+                    }
+                }
+            }
+            .interactiveDismissDisabled()
+        }
+    }
+    
+    private func nextStepRow(number: Int, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Text("\(number)")
+                .font(.caption.bold())
+                .foregroundStyle(.white)
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(Color.accentColor))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.bold())
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
     }
 }
 

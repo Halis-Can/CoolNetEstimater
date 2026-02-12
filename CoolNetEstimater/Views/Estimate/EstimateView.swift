@@ -235,8 +235,11 @@ struct EstimateView: View {
             }
         }
         .navigationDestination(for: SelectedOptionDestination.self) { dest in
-            SelectedOptionFullPageView(systemId: dest.systemId, optionId: dest.optionId)
-                .environmentObject(estimateVM)
+            if let system = estimateVM.currentEstimate.systems.first(where: { $0.id == dest.systemId }),
+               let option = system.options.first(where: { $0.id == dest.optionId }) {
+                DecisionOptionPageView(tier: option.tier)
+                    .environmentObject(estimateVM)
+            }
         }
     }
     
@@ -314,9 +317,7 @@ private struct SystemDetailView: View {
             VStack(alignment: .leading, spacing: 16) {
                 systemHeader
                 optionsRow
-                if selectedOption != nil {
-                    nextButton
-                }
+                finalSelectionButton
                 existingSystemForm
             }
             .padding()
@@ -324,15 +325,32 @@ private struct SystemDetailView: View {
         .navigationTitle(system.name)
     }
 
-    private var nextButton: some View {
-        NavigationLink(value: SelectedOptionDestination(systemId: system.id, optionId: selectedOption!.id)) {
-            Text("Next")
-                .font(.title2)
-                .fontWeight(.semibold)
+    private var finalSelectionButton: some View {
+        Group {
+            if let opt = selectedOption {
+                NavigationLink(value: SelectedOptionDestination(systemId: system.id, optionId: opt.id)) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.white)
+                        Text("Final Selection")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                }
+                .buttonStyle(.borderedProminent)
+            } else {
+                HStack(spacing: 8) {
+                    Text("Final Selection")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
+                .opacity(0.6)
+            }
         }
-        .buttonStyle(.borderedProminent)
         .padding(.vertical, 8)
     }
     
