@@ -72,26 +72,26 @@ enum SharePresenter {
         top.present(vc, animated: true)
     }
     
-    static func presentMail(subject: String, recipients: [String], body: String, attachmentData: Data, attachmentName: String) {
+    static func presentMail(subject: String, recipients: [String], body: String, attachmentData: Data, attachmentName: String, mimeType: String = "application/pdf") {
         guard MFMailComposeViewController.canSendMail(),
               let top = keyWindowTopViewController() else { return }
         let vc = MFMailComposeViewController()
         vc.setSubject(subject)
         vc.setToRecipients(recipients.isEmpty ? [] : recipients)
         vc.setMessageBody(body, isHTML: false)
-        vc.addAttachmentData(attachmentData, mimeType: "application/pdf", fileName: attachmentName)
+        vc.addAttachmentData(attachmentData, mimeType: mimeType, fileName: attachmentName)
         vc.mailComposeDelegate = MailComposeDelegate.shared
         MailComposeDelegate.shared.onDismiss = { MailComposeDelegate.shared.onDismiss = nil }
         top.present(vc, animated: true)
     }
-    
-    static func presentMessage(recipients: [String], body: String, attachmentData: Data, attachmentName: String) {
+
+    static func presentMessage(recipients: [String], body: String, attachmentData: Data, attachmentName: String, typeIdentifier: String = "com.adobe.pdf") {
         guard MFMessageComposeViewController.canSendText(),
               let top = keyWindowTopViewController() else { return }
         let vc = MFMessageComposeViewController()
         vc.recipients = recipients
         vc.body = body
-        vc.addAttachmentData(attachmentData, typeIdentifier: "com.adobe.pdf", filename: attachmentName)
+        vc.addAttachmentData(attachmentData, typeIdentifier: typeIdentifier, filename: attachmentName)
         vc.messageComposeDelegate = MessageComposeDelegate.shared
         MessageComposeDelegate.shared.onDismiss = { MessageComposeDelegate.shared.onDismiss = nil }
         top.present(vc, animated: true)

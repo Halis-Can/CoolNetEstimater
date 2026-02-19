@@ -37,6 +37,21 @@ enum Tier: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+/// Equipment category used for tier photos in Settings (AC, Furnace, Heat Pump).
+enum TierPhotoCategory: String, CaseIterable, Identifiable {
+    case ac = "ac"
+    case furnace = "furnace"
+    case heatPump = "heatpump"
+    var id: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .ac: return "AC"
+        case .furnace: return "Furnace"
+        case .heatPump: return "Heat Pump"
+        }
+    }
+}
+
 enum EquipmentType: String, CaseIterable, Identifiable, Codable {
     case acOnly = "AC Only"
     case coilOnly = "Coil Only"
@@ -50,6 +65,18 @@ enum EquipmentType: String, CaseIterable, Identifiable, Codable {
     case airHandlerOnly = "Air Handler Only"
     
     var id: String { rawValue }
+    
+    /// Maps equipment type to tier photo category for Good/Better/Best photos in Settings.
+    var tierPhotoCategory: TierPhotoCategory {
+        switch self {
+        case .acOnly, .acCondenserOnly, .coilOnly, .acCondenserCoil, .acCondenserCoilFurnace, .acFurnace, .airHandlerOnly:
+            return .ac
+        case .furnaceOnly:
+            return .furnace
+        case .heatPumpOnly, .heatPumpAirHandler:
+            return .heatPump
+        }
+    }
 }
 
 struct SystemOption: Identifiable, Codable {

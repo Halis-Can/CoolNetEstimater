@@ -32,8 +32,7 @@ struct SwiftUIViewPDFRenderer {
                                 margins: UIEdgeInsets) -> URL? {
         let hosting = UIHostingController(rootView: view)
         hosting.view.backgroundColor = .white
-        
-        // Measure content with a fixed width (page width - horizontal margins)
+
         let targetWidth = pageSize.width - margins.left - margins.right
         hosting.view.translatesAutoresizingMaskIntoConstraints = false
         let container = UIView(frame: CGRect(x: 0, y: 0, width: targetWidth, height: 10))
@@ -44,14 +43,12 @@ struct SwiftUIViewPDFRenderer {
             hosting.view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             hosting.view.topAnchor.constraint(equalTo: container.topAnchor)
         ])
-        // Allow the height to grow
         let heightConstraint = hosting.view.heightAnchor.constraint(equalToConstant: 10)
         heightConstraint.priority = .defaultLow
         heightConstraint.isActive = true
-        
+
         container.setNeedsLayout()
         container.layoutIfNeeded()
-        // Ask for best fitting size
         let size = hosting.view.systemLayoutSizeFitting(
             CGSize(width: targetWidth, height: UIView.layoutFittingExpandedSize.height),
             withHorizontalFittingPriority: .required,
@@ -59,30 +56,64 @@ struct SwiftUIViewPDFRenderer {
         )
         let contentHeight = max(size.height, 1)
         hosting.view.frame = CGRect(x: 0, y: 0, width: targetWidth, height: contentHeight)
-        container.frame = hosting.view.frame
+        container.frame = CGRect(x: 0, y: 0, width: targetWidth, height: contentHeight)
+        container.clipsToBounds = true
+
+        // Add to key window so the view gets a real layout/display pass (avoids blank PDF)
+        if let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }),
+           let w = scene.windows.first(where: { $0.isKeyWindow }) ?? scene.windows.first {
+            container.frame.origin = CGPoint(x: 0, y: -contentHeight - 200)
+            w.addSubview(container)
+        }
         container.setNeedsLayout()
         container.layoutIfNeeded()
-        
+        hosting.view.setNeedsDisplay()
+        hosting.view.layoutIfNeeded()
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))
+
+        // Render view to image first (drawHierarchy preserves logo and photos; layer.render into PDF often draws them black)
+        let imageScale: CGFloat = 2.0
+        let imageFormat = UIGraphicsImageRendererFormat()
+        imageFormat.scale = imageScale
+        imageFormat.opaque = false
+        let imageRenderer = UIGraphicsImageRenderer(size: CGSize(width: targetWidth, height: contentHeight), format: imageFormat)
+        let fullImage = imageRenderer.image { _ in
+            _ = container.drawHierarchy(in: CGRect(origin: .zero, size: CGSize(width: targetWidth, height: contentHeight)), afterScreenUpdates: true)
+        }
+
+        container.removeFromSuperview()
+
         let format = UIGraphicsPDFRendererFormat()
         format.documentInfo = [
             kCGPDFContextCreator as String: "CoolSeason",
             kCGPDFContextAuthor as String: "CoolSeason iPad App"
         ]
-        let renderer = UIGraphicsPDFRenderer(bounds: CGRect(origin: .zero, size: pageSize), format: format)
-        let data = renderer.pdfData { ctx in
+        let pdfRenderer = UIGraphicsPDFRenderer(bounds: CGRect(origin: .zero, size: pageSize), format: format)
+        let data = pdfRenderer.pdfData { ctx in
             let availableHeight = pageSize.height - margins.top - margins.bottom
             var yOffset: CGFloat = 0
             while yOffset < contentHeight {
                 ctx.beginPage()
-                let ctxRef = UIGraphicsGetCurrentContext()!
-                ctxRef.saveGState()
-                ctxRef.translateBy(x: margins.left, y: margins.top - yOffset)
-                // Render the SwiftUI hierarchy into PDF context
-                hosting.view.layer.render(in: ctxRef)
-                ctxRef.restoreGState()
+                let pageContentHeight = min(availableHeight, contentHeight - yOffset)
+                // Draw the slice of the rasterized image onto this PDF page (preserves colors and images)
+                if let cgImage = fullImage.cgImage {
+                    let scale = fullImage.scale
+                    let sourceY = Int(yOffset * scale)
+                    let sourceH = Int(pageContentHeight * scale)
+                    let sourceW = Int(targetWidth * scale)
+                    guard sourceH > 0, let cropped = cgImage.cropping(to: CGRect(x: 0, y: sourceY, width: sourceW, height: sourceH)) else {
+                        yOffset += availableHeight
+                        continue
+                    }
+                    let sliceImage = UIImage(cgImage: cropped, scale: fullImage.scale, orientation: fullImage.imageOrientation)
+                    sliceImage.draw(in: CGRect(x: margins.left, y: margins.top, width: targetWidth, height: pageContentHeight))
+                }
                 yOffset += availableHeight
             }
         }
+
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("CoolSeasonSummary-\(UUID().uuidString).pdf")
         do {

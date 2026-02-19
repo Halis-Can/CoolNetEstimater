@@ -14,53 +14,29 @@ import UniformTypeIdentifiers
 #endif
 
 struct TierOptionsPhotosSettingsView: View {
-    @AppStorage("tier_good_photo_data") private var goodPhotoData: Data?
-    @AppStorage("tier_better_photo_data") private var betterPhotoData: Data?
-    @AppStorage("tier_best_photo_data") private var bestPhotoData: Data?
-    @AppStorage("tier_good_visible") private var tierGoodVisible: Bool = true
-    @AppStorage("tier_better_visible") private var tierBetterVisible: Bool = true
-    @AppStorage("tier_best_visible") private var tierBestVisible: Bool = true
-    
-    @State private var goodImage: Image? = nil
-    @State private var betterImage: Image? = nil
-    @State private var bestImage: Image? = nil
-    
-    @State private var selectedGoodItem: PhotosPickerItem? = nil
-    @State private var selectedBetterItem: PhotosPickerItem? = nil
-    @State private var selectedBestItem: PhotosPickerItem? = nil
-    
-    #if os(macOS)
-    @State private var showGoodPicker = false
-    @State private var showBetterPicker = false
-    @State private var showBestPicker = false
-    #endif
+    @StateObject private var store = TierPhotoSettingsStore.shared
+    @State private var selectedCategory: TierPhotoCategory = .ac
     
     var body: some View {
         VStack(spacing: 16) {
             Form {
                 Section {
-                    Text("Set a photo and choose which options appear on the estimate. Only tiers with \"Show on estimate\" enabled will be shown to the customer.")
+                    Text("Configure photos, information text, and links for each equipment type. Select a category, edit the fields, then tap Save.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
                 
-                tierPhotoSection(title: "Good", image: $goodImage, photoData: $goodPhotoData,
-                                 selectedItem: $selectedGoodItem,
-                                 showOnEstimate: $tierGoodVisible,
-                                 loadFromData: loadGood, remove: removeGood,
-                                 loadFromPicker: loadGoodFromPicker)
+                Section("Equipment Type") {
+                    Picker("", selection: $selectedCategory) {
+                        ForEach(TierPhotoCategory.allCases) { cat in
+                            Label(cat.displayName, systemImage: iconForCategory(cat))
+                                .tag(cat)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
                 
-                tierPhotoSection(title: "Better", image: $betterImage, photoData: $betterPhotoData,
-                                 selectedItem: $selectedBetterItem,
-                                 showOnEstimate: $tierBetterVisible,
-                                 loadFromData: loadBetter, remove: removeBetter,
-                                 loadFromPicker: loadBetterFromPicker)
-                
-                tierPhotoSection(title: "Best", image: $bestImage, photoData: $bestPhotoData,
-                                 selectedItem: $selectedBestItem,
-                                 showOnEstimate: $tierBestVisible,
-                                 loadFromData: loadBest, remove: removeBest,
-                                 loadFromPicker: loadBestFromPicker)
+                CategoryEditorView(store: store, category: selectedCategory)
             }
             .scrollContentBackground(.hidden)
         }
@@ -69,76 +45,197 @@ struct TierOptionsPhotosSettingsView: View {
         .background(CoolGradientBackground())
         .navigationTitle("Good, Better, Best Photos")
         .onAppear {
-            loadGood()
-            loadBetter()
-            loadBest()
-        }
-        .onChange(of: selectedGoodItem) { newValue in
-            Task { if let item = newValue { await loadGoodFromPicker(item: item) } }
-        }
-        .onChange(of: selectedBetterItem) { newValue in
-            Task { if let item = newValue { await loadBetterFromPicker(item: item) } }
-        }
-        .onChange(of: selectedBestItem) { newValue in
-            Task { if let item = newValue { await loadBestFromPicker(item: item) } }
+            store.migrateFromLegacyIfNeeded()
         }
     }
     
-    @ViewBuilder
-    private func tierPhotoSection(
-        title: String,
-        image: Binding<Image?>,
-        photoData: Binding<Data?>,
-        selectedItem: Binding<PhotosPickerItem?>,
-        showOnEstimate: Binding<Bool>,
-        loadFromData: () -> Void,
-        remove: @escaping () -> Void,
-        loadFromPicker: (PhotosPickerItem) async -> Void
-    ) -> some View {
-        Section(title) {
-            Toggle("Show on estimate", isOn: showOnEstimate)
-                .font(.subheadline)
-            HStack(alignment: .top, spacing: 16) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(UIColor.secondarySystemFill))
-                        .frame(width: 120, height: 120)
-                    if let img = image.wrappedValue {
-                        img
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 120, height: 120)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                    } else {
-                        VStack(spacing: 6) {
-                            Image(systemName: "photo")
-                                .font(.system(size: 32))
-                                .foregroundStyle(.secondary)
-                            Text("No photo")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+    private func iconForCategory(_ cat: TierPhotoCategory) -> String {
+        switch cat {
+        case .ac: return "snowflake"
+        case .furnace: return "flame.fill"
+        case .heatPump: return "wind"
+        }
+    }
+}
+
+// MARK: - CategoryEditorView (one category at a time with Edit/Save)
+
+private struct CategoryEditorView: View {
+    @ObservedObject var store: TierPhotoSettingsStore
+    let category: TierPhotoCategory
+    
+    @State private var goodInfo: String = ""
+    @State private var betterInfo: String = ""
+    @State private var bestInfo: String = ""
+    @State private var goodLink: String = ""
+    @State private var betterLink: String = ""
+    @State private var bestLink: String = ""
+    @State private var isEditing: Bool = false
+    @State private var hasUnsavedChanges: Bool = false
+    
+    var body: some View {
+        Section {
+            ForEach(Tier.allCases) { tier in
+                TierSlotEditorView(
+                    store: store,
+                    category: category,
+                    tier: tier,
+                    info: bindingForInfo(tier),
+                    link: bindingForLink(tier),
+                    isEditing: isEditing
+                )
+            }
+            
+            if isEditing || hasUnsavedChanges {
+                HStack(spacing: 12) {
+                    Button {
+                        loadFromStore()
+                        isEditing = false
+                        hasUnsavedChanges = false
+                    } label: {
+                        Label("Cancel", systemImage: "xmark")
                     }
+                    .buttonStyle(.bordered)
+                    
+                    Button {
+                        saveToStore()
+                        isEditing = false
+                        hasUnsavedChanges = false
+                    } label: {
+                        Label("Save Changes", systemImage: "checkmark.circle.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!hasUnsavedChanges)
                 }
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.secondary.opacity(0.3), lineWidth: 1))
-                
+                .padding(.vertical, 8)
+            } else {
+                Button {
+                    isEditing = true
+                } label: {
+                    Label("Edit Info & Links", systemImage: "pencil")
+                }
+                .buttonStyle(.bordered)
+                .padding(.vertical, 4)
+            }
+        } header: {
+            HStack(spacing: 8) {
+                Image(systemName: iconForCategory(category))
+                    .foregroundStyle(.secondary)
+                Text("\(category.displayName) — Good, Better, Best")
+            }
+        }
+        .onAppear {
+            loadFromStore()
+        }
+        .onChange(of: category) { _ in
+            loadFromStore()
+            isEditing = false
+            hasUnsavedChanges = false
+        }
+    }
+    
+    private func iconForCategory(_ cat: TierPhotoCategory) -> String {
+        switch cat {
+        case .ac: return "snowflake"
+        case .furnace: return "flame.fill"
+        case .heatPump: return "wind"
+        }
+    }
+    
+    private func bindingForInfo(_ tier: Tier) -> Binding<String> {
+        let b: Binding<String>
+        switch tier {
+        case .good: b = $goodInfo
+        case .better: b = $betterInfo
+        case .best: b = $bestInfo
+        }
+        return Binding(
+            get: { b.wrappedValue },
+            set: { b.wrappedValue = $0; hasUnsavedChanges = true }
+        )
+    }
+    
+    private func bindingForLink(_ tier: Tier) -> Binding<String> {
+        let b: Binding<String>
+        switch tier {
+        case .good: b = $goodLink
+        case .better: b = $betterLink
+        case .best: b = $bestLink
+        }
+        return Binding(
+            get: { b.wrappedValue },
+            set: { b.wrappedValue = $0; hasUnsavedChanges = true }
+        )
+    }
+    
+    private func loadFromStore() {
+        goodInfo = store.info(category: category, tier: .good)
+        betterInfo = store.info(category: category, tier: .better)
+        bestInfo = store.info(category: category, tier: .best)
+        goodLink = store.link(category: category, tier: .good)
+        betterLink = store.link(category: category, tier: .better)
+        bestLink = store.link(category: category, tier: .best)
+    }
+    
+    private func saveToStore() {
+        store.setInfo(goodInfo, category: category, tier: .good)
+        store.setInfo(betterInfo, category: category, tier: .better)
+        store.setInfo(bestInfo, category: category, tier: .best)
+        store.setLink(goodLink, category: category, tier: .good)
+        store.setLink(betterLink, category: category, tier: .better)
+        store.setLink(bestLink, category: category, tier: .best)
+    }
+}
+
+// MARK: - TierSlotEditorView
+
+private struct TierSlotEditorView: View {
+    @ObservedObject var store: TierPhotoSettingsStore
+    let category: TierPhotoCategory
+    let tier: Tier
+    @Binding var info: String
+    @Binding var link: String
+    var isEditing: Bool = true
+    
+    @State private var selectedItem: PhotosPickerItem?
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(tier.displayName).font(.headline)
+                Spacer()
+                Toggle("Show on estimate", isOn: Binding(
+                    get: { store.visible(category: category, tier: tier) },
+                    set: { store.setVisible($0, category: category, tier: tier) }
+                ))
+                .labelsHidden()
+            }
+            
+            HStack(alignment: .top, spacing: 16) {
+                photoPreview
                 VStack(alignment: .leading, spacing: 8) {
                     #if os(iOS)
-                    PhotosPicker(selection: selectedItem, matching: .images) {
+                    PhotosPicker(selection: $selectedItem, matching: .images) {
                         Label("Change Photo", systemImage: "photo.on.rectangle")
                     }
                     .buttonStyle(.bordered)
+                    .onChange(of: selectedItem) { newVal in
+                        if let item = newVal {
+                            Task { await loadFromPicker(item: item) }
+                            selectedItem = nil
+                        }
+                    }
                     #elseif os(macOS)
                     Button {
-                        showTierPicker(photoData: photoData, image: image)
+                        loadFromFilePicker()
                     } label: {
                         Label("Change Photo", systemImage: "photo.on.rectangle")
                     }
                     .buttonStyle(.bordered)
                     #endif
-                    if photoData.wrappedValue != nil {
+                    if store.photoData(category: category, tier: tier) != nil {
                         Button(role: .destructive) {
-                            remove()
+                            store.setPhotoData(nil, category: category, tier: tier)
                         } label: {
                             Label("Remove Photo", systemImage: "trash")
                         }
@@ -146,12 +243,74 @@ struct TierOptionsPhotosSettingsView: View {
                     }
                 }
             }
-            .padding(.vertical, 4)
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Information (shown to customer below photo)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextField("Product details, features...", text: $info, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(3...6)
+                    .disabled(!isEditing)
+            }
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Web link (e.g. https://www.carrier.com/... )")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextField("https://", text: $link)
+                    .textFieldStyle(.roundedBorder)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .disabled(!isEditing)
+            }
         }
+        .padding(.vertical, 8)
     }
     
-    #if os(macOS)
-    private func showTierPicker(photoData: Binding<Data?>, image: Binding<Image?>) {
+    private var photoPreview: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(UIColor.secondarySystemFill))
+                .frame(width: 120, height: 120)
+            if let data = store.photoData(category: category, tier: tier) {
+                tierImage(from: data)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 120, height: 120)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+            } else {
+                VStack(spacing: 6) {
+                    Image(systemName: "photo")
+                        .font(.system(size: 32))
+                        .foregroundStyle(.secondary)
+                    Text("No photo")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.secondary.opacity(0.3), lineWidth: 1))
+    }
+    
+    private func tierImage(from data: Data) -> Image {
+        #if os(iOS)
+        if let ui = UIImage(data: data) { return Image(uiImage: ui) }
+        #elseif os(macOS)
+        if let ns = NSImage(data: data) { return Image(nsImage: ns) }
+        #endif
+        return Image(systemName: "photo")
+    }
+    
+    #if os(iOS)
+    private func loadFromPicker(item: PhotosPickerItem) async {
+        guard let raw = try? await item.loadTransferable(type: Data.self),
+              let ui = UIImage(data: raw),
+              let compressed = ui.jpegData(compressionQuality: 0.8) else { return }
+        store.setPhotoData(compressed, category: category, tier: tier)
+    }
+    #elseif os(macOS)
+    private func loadFromFilePicker() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image]
         panel.allowsMultipleSelection = false
@@ -164,77 +323,10 @@ struct TierOptionsPhotosSettingsView: View {
                 let bitmapRep = NSBitmapImageRep(data: tiffData ?? Data())
                 let pngData = bitmapRep?.representation(using: .png, properties: [:])
                 if let data = pngData {
-                    photoData.wrappedValue = data
-                    image.wrappedValue = Image(nsImage: nsImage)
+                    store.setPhotoData(data, category: category, tier: tier)
                 }
             }
         }
     }
     #endif
-    
-    private func loadGood() {
-        loadTierImage(from: goodPhotoData, into: $goodImage)
-    }
-    private func loadBetter() {
-        loadTierImage(from: betterPhotoData, into: $betterImage)
-    }
-    private func loadBest() {
-        loadTierImage(from: bestPhotoData, into: $bestImage)
-    }
-    
-    private func loadTierImage(from data: Data?, into binding: Binding<Image?>) {
-        guard let data = data else {
-            binding.wrappedValue = nil
-            return
-        }
-        #if os(iOS)
-        if let ui = UIImage(data: data) {
-            binding.wrappedValue = Image(uiImage: ui)
-        }
-        #elseif os(macOS)
-        if let ns = NSImage(data: data) {
-            binding.wrappedValue = Image(nsImage: ns)
-        }
-        #endif
-    }
-    
-    #if os(iOS)
-    private func loadGoodFromPicker(item: PhotosPickerItem) async {
-        await loadTierFromPicker(item: item, into: $goodPhotoData, image: $goodImage)
-    }
-    private func loadBetterFromPicker(item: PhotosPickerItem) async {
-        await loadTierFromPicker(item: item, into: $betterPhotoData, image: $betterImage)
-    }
-    private func loadBestFromPicker(item: PhotosPickerItem) async {
-        await loadTierFromPicker(item: item, into: $bestPhotoData, image: $bestImage)
-    }
-    
-    private func loadTierFromPicker(item: PhotosPickerItem, into data: Binding<Data?>, image: Binding<Image?>) async {
-        guard let raw = try? await item.loadTransferable(type: Data.self),
-              let ui = UIImage(data: raw),
-              let compressed = ui.jpegData(compressionQuality: 0.8) else { return }
-        data.wrappedValue = compressed
-        image.wrappedValue = Image(uiImage: ui)
-    }
-    #elseif os(macOS)
-    private func loadGoodFromPicker(item: PhotosPickerItem) async {}
-    private func loadBetterFromPicker(item: PhotosPickerItem) async {}
-    private func loadBestFromPicker(item: PhotosPickerItem) async {}
-    #endif
-    
-    private func removeGood() {
-        goodPhotoData = nil
-        goodImage = nil
-        selectedGoodItem = nil
-    }
-    private func removeBetter() {
-        betterPhotoData = nil
-        betterImage = nil
-        selectedBetterItem = nil
-    }
-    private func removeBest() {
-        bestPhotoData = nil
-        bestImage = nil
-        selectedBestItem = nil
-    }
 }

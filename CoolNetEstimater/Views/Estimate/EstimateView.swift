@@ -151,7 +151,7 @@ struct EstimateView: View {
                 }
             }
             
-            Section("Additional Equipment") {
+            Section {
                 ForEach(estimateVM.currentEstimate.addOns) { addon in
                     HStack {
                         Toggle(isOn: bindingForAddOnEnabled(addon.id)) {
@@ -182,6 +182,10 @@ struct EstimateView: View {
                 } label: {
                     Label("Add from Templates", systemImage: "plus.circle")
                 }
+            } header: {
+                Text("Additional Equipment")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
             }
             
             Section("Totals") {
@@ -190,11 +194,13 @@ struct EstimateView: View {
                     Spacer()
                     Text(formatCurrency(estimateVM.currentEstimate.systemsSubtotal))
                 }
+                Divider()
                 HStack {
                     Text("Additional Equipment Subtotal")
                     Spacer()
                     Text(formatCurrency(estimateVM.currentEstimate.addOnsSubtotal))
                 }
+                Divider()
                 let grandTotal = estimateVM.currentEstimate.grandTotal
                 let paymentOption = PaymentOption(rawValue: paymentOptionRaw) ?? .cashCheckZelle
                 if paymentOption == .creditCard {
@@ -210,6 +216,7 @@ struct EstimateView: View {
                         Text(formatCurrency(grandTotal * (creditCardFeePercent / 100.0)))
                             .bold()
                     }
+                    Divider()
                 }
                 HStack {
                     Text(paymentOption == .creditCard ? "Total" : "Grand Total")
@@ -226,6 +233,27 @@ struct EstimateView: View {
                         }
                     }
                     .bold()
+                }
+                Divider()
+                // Cash Discount – nakit/çek/Zelle farkı
+                let financeMarkupAmount = grandTotal * (financeMarkupPercent / 100.0)
+                if financeMarkupAmount > 0 {
+                    HStack {
+                        Text("Cash Discount – Credit")
+                            .font(.subheadline)
+                        Spacer()
+                        Text("- \(formatCurrency(financeMarkupAmount))")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    Divider()
+                    HStack {
+                        Text("Sub-Total (Cash/Check/Zelle)")
+                            .font(.subheadline.bold())
+                        Spacer()
+                        Text(formatCurrency(grandTotal))
+                            .font(.subheadline.bold())
+                    }
                 }
             }
         }
@@ -291,16 +319,15 @@ private struct SelectedOptionDestination: Hashable {
 
 private struct SystemDetailView: View {
     @EnvironmentObject var estimateVM: EstimateViewModel
-    @AppStorage("tier_good_visible") private var tierGoodVisible: Bool = true
-    @AppStorage("tier_better_visible") private var tierBetterVisible: Bool = true
-    @AppStorage("tier_best_visible") private var tierBestVisible: Bool = true
+    @StateObject private var tierStore = TierPhotoSettingsStore.shared
     let system: EstimateSystem
     
     private var visibleTiers: Set<Tier> {
+        let cat = system.equipmentType.tierPhotoCategory
         var s = Set<Tier>()
-        if tierGoodVisible { s.insert(.good) }
-        if tierBetterVisible { s.insert(.better) }
-        if tierBestVisible { s.insert(.best) }
+        if tierStore.visible(category: cat, tier: .good) { s.insert(.good) }
+        if tierStore.visible(category: cat, tier: .better) { s.insert(.better) }
+        if tierStore.visible(category: cat, tier: .best) { s.insert(.best) }
         return s
     }
     
@@ -382,7 +409,7 @@ private struct SystemDetailView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
                     ForEach(system.options.filter { visibleTiers.contains($0.tier) }) { option in
-                        SystemOptionCard(option: option, isSelected: option.isSelectedByCustomer) {
+                        SystemOptionCard(option: option, system: system, isSelected: option.isSelectedByCustomer) {
                             estimateVM.selectOption(systemId: system.id, optionId: option.id)
                         }
                         .frame(width: 320)
@@ -478,7 +505,7 @@ private struct SelectedOptionFullPageView: View {
                             .font(.title)
                             .bold()
                             .padding(.horizontal)
-                        SelectedOptionFullCard(option: option)
+                        SelectedOptionFullCard(option: option, system: system)
                             .padding(.horizontal)
                     }
                     .padding(.vertical, 24)
@@ -503,6 +530,7 @@ private struct SelectedOptionFullPageView: View {
 
 private struct SelectedOptionFullCard: View {
     let option: SystemOption
+    let system: EstimateSystem
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -515,7 +543,13 @@ private struct SelectedOptionFullCard: View {
                     .foregroundStyle(.green)
                     .font(.title2)
             }
-            TierOptionPhotoView(tier: option.tier, height: 220, fallbackSymbol: option.imageName ?? "shippingbox")
+            TierOptionPhotoView(
+                tier: option.tier,
+                height: 220,
+                fallbackSymbol: option.imageName ?? "shippingbox",
+                equipmentCategory: system.equipmentType.tierPhotoCategory,
+                showInfoAndLink: true
+            )
             Text("\(option.seer, specifier: "%.0f") SEER • \(option.stage)")
                 .font(.title3)
                 .foregroundStyle(.secondary)
@@ -544,6 +578,7 @@ private struct SelectedOptionFullCard: View {
 
 private struct SystemOptionCard: View {
     let option: SystemOption
+    let system: EstimateSystem
     let isSelected: Bool
     let onSelect: () -> Void
     
@@ -561,7 +596,13 @@ private struct SystemOptionCard: View {
                 }
                 .padding(.bottom, 4)
                 
-                TierOptionPhotoView(tier: option.tier, height: 140, fallbackSymbol: option.imageName ?? "shippingbox")
+                TierOptionPhotoView(
+                    tier: option.tier,
+                    height: 140,
+                    fallbackSymbol: option.imageName ?? "shippingbox",
+                    equipmentCategory: system.equipmentType.tierPhotoCategory,
+                    showInfoAndLink: true
+                )
                 
                 Text("\(option.seer, specifier: "%.0f") SEER • \(option.stage)")
                     .font(.subheadline)

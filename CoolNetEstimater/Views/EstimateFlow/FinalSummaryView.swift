@@ -273,7 +273,13 @@ struct FinalSummaryView: View {
             let items = systemsWithOption
             let paymentOption = PaymentOption(rawValue: paymentOptionRaw) ?? .cashCheckZelle
             VStack(alignment: .leading, spacing: 10) {
-                TierOptionPhotoView(tier: tier, height: 80, fallbackSymbol: imageNames.first ?? "shippingbox")
+                TierOptionPhotoView(
+                    tier: tier,
+                    height: 80,
+                    fallbackSymbol: imageNames.first ?? "shippingbox",
+                    equipmentCategory: items.first?.0.equipmentType.tierPhotoCategory,
+                    showInfoAndLink: true
+                )
                 Text(label).font(.headline)
                 if items.isEmpty {
                     Text("No matching options").font(.caption).foregroundStyle(.secondary)
@@ -303,21 +309,21 @@ struct FinalSummaryView: View {
                     }
                 }
                 
-                // Inline Additional Equipment list for clarity
+                // Inline Additional Equipment list for clarity (small font above Total)
                 if !enabledAddOns.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text("Additional Equipment")
-                            .font(.subheadline).bold()
+                            .font(.system(size: 10)).bold()
                         ForEach(enabledAddOns) { addon in
                             HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(addon.name)
-                                    Text(addon.description).font(.caption).foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(addon.name).font(.system(size: 10))
+                                    Text(addon.description).font(.system(size: 9)).foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                Text(formatCurrency(addon.price)).bold()
+                                Text(formatCurrency(addon.price)).font(.system(size: 10)).bold()
                             }
-                            .padding(6)
+                            .padding(4)
                             .background(Color(UIColor.secondarySystemBackground))
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                         }
@@ -325,16 +331,16 @@ struct FinalSummaryView: View {
                 }
                 
                 Divider().padding(.vertical, 4)
-                // Per-card subtotals and total investment
+                // Per-card subtotals and total investment (small font above Total)
                 HStack {
-                    Text("Systems Subtotal")
+                    Text("Systems Subtotal").font(.system(size: 10))
                     Spacer()
-                    Text(formatCurrency(optionSum))
+                    Text(formatCurrency(optionSum)).font(.system(size: 10))
                 }
                 HStack {
-                    Text("Additional Equipment Subtotal")
+                    Text("Additional Equipment Subtotal").font(.system(size: 10))
                     Spacer()
-                    Text(formatCurrency(addOnsSubtotal))
+                    Text(formatCurrency(addOnsSubtotal)).font(.system(size: 10))
                 }
                 HStack {
                     Text("Total Investment").bold()
@@ -598,7 +604,13 @@ struct FinalSummaryView: View {
                                 .foregroundStyle(.green)
                         }
                     }
-                    TierOptionPhotoView(tier: tier, height: 70, fallbackSymbol: option?.imageName ?? "shippingbox")
+                    TierOptionPhotoView(
+                        tier: tier,
+                        height: 70,
+                        fallbackSymbol: option?.imageName ?? "shippingbox",
+                        equipmentCategory: system.equipmentType.tierPhotoCategory,
+                        showInfoAndLink: true
+                    )
                     if let opt = option {
                     Text("\(formatSystemCapacity(system)) • \(system.equipmentType.rawValue)")
                         .font(.subheadline)
@@ -614,21 +626,21 @@ struct FinalSummaryView: View {
                     if let m = opt.furnaceModel, !m.isEmpty {
                         Text("Furnace: \(m)").font(.caption).foregroundStyle(.secondary)
                     }
-                    // List add-ons individually for this system (smaller text to fit columns)
+                    // List add-ons individually for this system (50% smaller above Total)
                     if !enabledAddOnsForSystem.isEmpty {
                         Divider().padding(.vertical, 2)
-                        Text("Additional Equipment").font(.subheadline).bold()
-                        VStack(alignment: .leading, spacing: 3) {
+                        Text("Additional Equipment").font(.system(size: 10)).bold()
+                        VStack(alignment: .leading, spacing: 2) {
                             ForEach(enabledAddOnsForSystem) { addon in
                                 HStack(alignment: .firstTextBaseline) {
                                     VStack(alignment: .leading, spacing: 1) {
-                                        Text(addon.name).font(.caption2)
-                                        Text(addon.description).font(.caption2).foregroundStyle(.secondary)
+                                        Text(addon.name).font(.system(size: 9))
+                                        Text(addon.description).font(.system(size: 8)).foregroundStyle(.secondary)
                                     }
                                     Spacer()
-                                    Text(formatCurrency(addon.price)).font(.caption2).bold()
+                                    Text(formatCurrency(addon.price)).font(.system(size: 9)).bold()
                                 }
-                                .padding(6)
+                                .padding(4)
                                 .background(Color(UIColor.secondarySystemBackground))
                                 .clipShape(RoundedRectangle(cornerRadius: 6))
                             }
@@ -636,9 +648,9 @@ struct FinalSummaryView: View {
                     }
                     Divider().padding(.vertical, 4)
                     HStack {
-                        Text("Additional Equipment")
+                        Text("Additional Equipment").font(.system(size: 10))
                         Spacer()
-                        Text(formatCurrency(addOnsSubtotal))
+                        Text(formatCurrency(addOnsSubtotal)).font(.system(size: 10))
                     }
                     HStack {
                         Text("Total").bold()
@@ -1105,13 +1117,19 @@ struct DecisionOptionPageView: View {
         return formatCurrency(value)
     }
     
-    /// Payment options block: same as equipment/estimate page (Cash/Check, Credit Card, Finance) so customer sees what they will pay before signing.
+    /// Finance markup amount (savings if customer pays cash instead of financing).
+    private var financeMarkupAmount: Double {
+        totalWithMarkup - totalIncludingAddOns
+    }
+
+    /// Payment options block: shows Total with Finance (e.g. 60 months), Cash Discount – Credit, and prominent Cash/Zelle option.
     private var selectionPaymentOptionsSection: some View {
         let paymentOption = PaymentOption(rawValue: paymentOptionRaw) ?? .cashCheckZelle
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: 10) {
             Text("Payment: \(paymentOption.displayName)")
                 .font(.subheadline.bold())
                 .foregroundStyle(.secondary)
+
             if paymentOption == .creditCard {
                 HStack {
                     Text("Grand Total")
@@ -1132,11 +1150,15 @@ struct DecisionOptionPageView: View {
                         .stroke(Color.accentColor.opacity(0.6), lineWidth: 1)
                 )
             }
+
+            // Total with Finance (e.g. 60 months) – primary total when financing
             if paymentOption == .finance {
                 HStack {
-                    Text("Total with Finance")
+                    Text("Total with Finance (\(financeTermMonths) months)")
+                        .bold()
                     Spacer()
                     Text(formatCurrency(totalWithMarkup))
+                        .font(.title3.bold())
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Financing Plan")
@@ -1159,7 +1181,32 @@ struct DecisionOptionPageView: View {
                             .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)
                     )
                 }
+                // Cash Discount – Credit: difference if customer paid cash/Zelle
+                if financeMarkupAmount > 0 {
+                    HStack {
+                        Text("Cash Discount – Credit")
+                            .font(.subheadline)
+                        Spacer()
+                        Text("- \(formatCurrency(financeMarkupAmount))")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.green.opacity(0.6), lineWidth: 1)
+                    )
+                    HStack {
+                        Text("Sub-Total (Cash/Check/Zelle)")
+                            .bold()
+                        Spacer()
+                        Text(formatCurrency(totalIncludingAddOns))
+                            .font(.subheadline.bold())
+                    }
+                }
             }
+
             HStack {
                 Text(paymentOption == .creditCard ? "Total" : "Grand Total")
                     .bold()
@@ -1167,101 +1214,134 @@ struct DecisionOptionPageView: View {
                 Text(formatCurrency(displayTotal))
                     .font(.title3.bold())
             }
+
+            // Prominent Cash / Check / Zelle option so customer sees the cash alternative
+            cashPaymentOptionBox
         }
     }
+
+    /// Large, prominent box: Cash / Check / Zelle – pay this amount and save finance/card fees (like "CASH PAID" on invoice).
+    private var cashPaymentOptionBox: some View {
+        let paymentOption = PaymentOption(rawValue: paymentOptionRaw) ?? .cashCheckZelle
+        let savings = financeMarkupAmount
+        let cardFee = totalIncludingAddOns * (creditCardFeePercent / 100.0)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "banknote.fill")
+                    .font(.title2)
+                    .foregroundStyle(.green)
+                Text("Cash / Check / Zelle Transfer")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+            }
+            Text("Pay \(formatCurrency(totalIncludingAddOns)) by cash, check, or Zelle — no finance charges.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            if savings > 0 {
+                Text("Save \(formatCurrency(savings)) compared to \(financeTermMonths)-month financing.")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.green)
+            }
+            if paymentOption == .creditCard, cardFee > 0 {
+                Text("Save \(formatCurrency(cardFee)) by avoiding the credit card fee.")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.green)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.green.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.green.opacity(0.4), lineWidth: 2)
+        )
+    }
     
+    /// Full page content (header through Approved) for JPEG export — same layout as on screen so share shows all details.
+    @ViewBuilder
+    private var selectionPageContentForImage: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            selectionPageHeaderRow
+            selectionPageCustomerRow
+            selectionLockedNotice
+            tierHeroSection
+            if systemsWithOption.isEmpty {
+                Text("No option selected for this series.")
+                    .foregroundStyle(.secondary)
+                    .padding()
+            } else {
+                ForEach(Array(systemsWithOption.enumerated()), id: \.element.0.id) { _, item in
+                    let (sys, opt) = item
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(sys.name)
+                            .font(.headline)
+                        Text("\(formatSystemCapacity(sys)) • \(sys.equipmentType.rawValue)")
+                            .font(.subheadline)
+                        Text("\(opt.seer, specifier: "%.0f") SEER • \(opt.stage)")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        if let m = opt.outdoorModel, !m.isEmpty {
+                            Text("Outdoor: \(m)").font(.caption).foregroundStyle(.secondary)
+                        }
+                        if let m = opt.indoorModel, !m.isEmpty {
+                            Text("Indoor: \(m)").font(.caption).foregroundStyle(.secondary)
+                        }
+                        if let m = opt.furnaceModel, !m.isEmpty {
+                            Text("Furnace: \(m)").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(UIColor.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                if !estimateVM.currentEstimate.addOns.filter({ $0.enabled }).isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Additional Equipment")
+                            .font(.headline)
+                        ForEach(estimateVM.currentEstimate.addOns.filter { $0.enabled }) { addon in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(addon.name)
+                                    Text(addon.description).font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Text(formatCurrency(addon.price)).bold()
+                            }
+                            .padding(8)
+                            .background(Color(UIColor.secondarySystemBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+                }
+                Divider().padding(.vertical, 8)
+                HStack {
+                    Text("Systems Subtotal")
+                    Spacer()
+                    Text(formatCurrency(optionSum))
+                }
+                HStack {
+                    Text("Additional Equipment Subtotal")
+                    Spacer()
+                    Text(formatCurrency(addOnsSubtotal))
+                }
+                selectionPaymentOptionsSection
+            }
+            warrantyAndIncludedServicesSection
+            termsAndPromisesSection
+            signatureSection
+            approveOrApprovedSection
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    // Same as Estimate page: company logo + estimate # on top row, company info + customer on second row
-                    selectionPageHeaderRow
-                    selectionPageCustomerRow
-                    
-                    // Locked notice for customer: read-only, sign below to approve
-                    selectionLockedNotice
-                    
-                    // High-quality tier system picture(s)
-                    tierHeroSection
-                    
-                    if systemsWithOption.isEmpty {
-                        Text("No option selected for this series.")
-                            .foregroundStyle(.secondary)
-                            .padding()
-                    } else {
-                        ForEach(Array(systemsWithOption.enumerated()), id: \.element.0.id) { _, item in
-                            let (sys, opt) = item
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(sys.name)
-                                    .font(.headline)
-                                Text("\(formatSystemCapacity(sys)) • \(sys.equipmentType.rawValue)")
-                                    .font(.subheadline)
-                                Text("\(opt.seer, specifier: "%.0f") SEER • \(opt.stage)")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                if let m = opt.outdoorModel, !m.isEmpty {
-                                    Text("Outdoor: \(m)").font(.caption).foregroundStyle(.secondary)
-                                }
-                                if let m = opt.indoorModel, !m.isEmpty {
-                                    Text("Indoor: \(m)").font(.caption).foregroundStyle(.secondary)
-                                }
-                                if let m = opt.furnaceModel, !m.isEmpty {
-                                    Text("Furnace: \(m)").font(.caption).foregroundStyle(.secondary)
-                                }
-                            }
-                            .padding()
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color(UIColor.secondarySystemBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
-                        
-                        if !estimateVM.currentEstimate.addOns.filter({ $0.enabled }).isEmpty {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Additional Equipment")
-                                    .font(.headline)
-                                ForEach(estimateVM.currentEstimate.addOns.filter { $0.enabled }) { addon in
-                                    HStack {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(addon.name)
-                                            Text(addon.description).font(.caption).foregroundStyle(.secondary)
-                                        }
-                                        Spacer()
-                                        Text(formatCurrency(addon.price)).bold()
-                                    }
-                                    .padding(8)
-                                    .background(Color(UIColor.secondarySystemBackground))
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                                }
-                            }
-                        }
-                        
-                        Divider().padding(.vertical, 8)
-                        HStack {
-                            Text("Systems Subtotal")
-                            Spacer()
-                            Text(formatCurrency(optionSum))
-                        }
-                        HStack {
-                            Text("Additional Equipment Subtotal")
-                            Spacer()
-                            Text(formatCurrency(addOnsSubtotal))
-                        }
-                        selectionPaymentOptionsSection
-                    }
-                    
-                    // Warranty and Included Services (above signature)
-                    warrantyAndIncludedServicesSection
-                    
-                    // Terms, warranty details & Cool Season promises
-                    termsAndPromisesSection
-                    
-                    // Signature section
-                    signatureSection
-                    
-                    // Approve button (after sign) or green Approved (after approval)
-                    approveOrApprovedSection
-                    
-                    // Send (PDF / Email / Text) — for customer to send signed estimate
+                    selectionPageContentForImage
                     shareSection
                 }
                 .padding(24)
@@ -1429,7 +1509,13 @@ struct DecisionOptionPageView: View {
     
     private var tierHeroSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TierOptionPhotoView(tier: tier, height: 240, fallbackSymbol: tierPhotoFallbackSymbol)
+            TierOptionPhotoView(
+                tier: tier,
+                height: 240,
+                fallbackSymbol: tierPhotoFallbackSymbol,
+                equipmentCategory: systemsWithOption.first?.0.equipmentType.tierPhotoCategory,
+                showInfoAndLink: true
+            )
                 .frame(maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .overlay(
@@ -1686,30 +1772,52 @@ struct DecisionOptionPageView: View {
         #endif
     }
     
+    /// Builds the full selection page content as a view sized for PDF (single width so it fits PDF page).
+    private var selectionPageContentForPDF: some View {
+        selectionPageContentForImage
+            .padding(24)
+            .frame(width: 548)
+            .frame(maxWidth: .infinity)
+            .background(Color(UIColor.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color(UIColor.separator), lineWidth: 1))
+            .environmentObject(estimateVM)
+    }
+
+    /// PDF data for sharing: full-page PDF from SwiftUI view, or fallback to simple estimate PDF so share always works.
+    private var pdfDataForSharing: Data {
+        if let url = SwiftUIViewPDFRenderer.render(view: selectionPageContentForPDF),
+           let data = try? Data(contentsOf: url) {
+            try? FileManager.default.removeItem(at: url)
+            return data
+        }
+        return EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
+    }
+
     private var shareSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Send")
                 .font(.headline)
-            Text("Share the signed estimate via PDF, email, or text.")
+            Text("Share the full page as PDF so all details, amounts, and totals are included.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             HStack(spacing: 12) {
                 #if os(iOS)
                 Button {
-                    let data = EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
-                    SharePresenter.presentActivitySheet(activityItems: [data, "Estimate.pdf"])
+                    let pdfData = pdfDataForSharing
+                    SharePresenter.presentActivitySheet(activityItems: [pdfData, "Estimate.pdf"])
                 } label: {
                     Label("PDF", systemImage: "doc.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 Button {
-                    let data = EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
+                    let pdfData = pdfDataForSharing
                     SharePresenter.presentMail(
                         subject: "Your Estimate",
                         recipients: estimateVM.currentEstimate.email.isEmpty ? [] : [estimateVM.currentEstimate.email],
-                        body: "Please find your estimate attached.",
-                        attachmentData: data,
+                        body: "Please find your signed estimate attached.",
+                        attachmentData: pdfData,
                         attachmentName: "Estimate.pdf"
                     )
                 } label: {
@@ -1719,11 +1827,11 @@ struct DecisionOptionPageView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(!MFMailComposeViewController.canSendMail())
                 Button {
-                    let data = EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
+                    let pdfData = pdfDataForSharing
                     SharePresenter.presentMessage(
                         recipients: estimateVM.currentEstimate.phone.isEmpty ? [] : [estimateVM.currentEstimate.phone],
-                        body: "Your estimate is attached.",
-                        attachmentData: data,
+                        body: "Your signed estimate is attached.",
+                        attachmentData: pdfData,
                         attachmentName: "Estimate.pdf"
                     )
                 } label: {

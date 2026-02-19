@@ -459,17 +459,16 @@ private func displayName(for type: EquipmentType) -> String {
 
 private struct SystemOptionsScreen: View {
     @EnvironmentObject var estimateVM: EstimateViewModel
-    @AppStorage("tier_good_visible") private var tierGoodVisible: Bool = true
-    @AppStorage("tier_better_visible") private var tierBetterVisible: Bool = true
-    @AppStorage("tier_best_visible") private var tierBestVisible: Bool = true
+    @StateObject private var tierStore = TierPhotoSettingsStore.shared
     let next: () -> Void
     let back: () -> Void
     
-    private var visibleTiers: Set<Tier> {
+    private func visibleTiers(for system: EstimateSystem) -> Set<Tier> {
+        let cat = system.equipmentType.tierPhotoCategory
         var s = Set<Tier>()
-        if tierGoodVisible { s.insert(.good) }
-        if tierBetterVisible { s.insert(.better) }
-        if tierBestVisible { s.insert(.best) }
+        if tierStore.visible(category: cat, tier: .good) { s.insert(.good) }
+        if tierStore.visible(category: cat, tier: .better) { s.insert(.better) }
+        if tierStore.visible(category: cat, tier: .best) { s.insert(.best) }
         return s
     }
     
@@ -499,7 +498,7 @@ private struct SystemOptionsScreen: View {
     }
     
     private func filteredOptions(for system: EstimateSystem) -> [SystemOption] {
-        return system.options.filter { visibleTiers.contains($0.tier) }
+        return system.options.filter { visibleTiers(for: system).contains($0.tier) }
     }
 }
 
@@ -509,9 +508,19 @@ private struct OptionEditableRow: View {
     let systemId: UUID
     @State private var showToCustomer: Bool = true
     
+    private var system: EstimateSystem? {
+        estimateVM.currentEstimate.systems.first { $0.id == systemId }
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TierOptionPhotoView(tier: option.tier, height: 100, fallbackSymbol: option.imageName ?? "shippingbox")
+            TierOptionPhotoView(
+                tier: option.tier,
+                height: 100,
+                fallbackSymbol: option.imageName ?? "shippingbox",
+                equipmentCategory: system?.equipmentType.tierPhotoCategory,
+                showInfoAndLink: true
+            )
                 .padding(.bottom, 4)
             HStack {
                 Text(option.tier.displayName).font(.headline)

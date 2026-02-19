@@ -18,6 +18,13 @@ struct CompareView: View {
         case furnace = "Furnace"
         case heatPump = "Heat Pump"
         var id: String { rawValue }
+        var tierPhotoCategory: TierPhotoCategory {
+            switch self {
+            case .ac: return .ac
+            case .furnace: return .furnace
+            case .heatPump: return .heatPump
+            }
+        }
         
         var baseImageName: String {
             switch self {
@@ -34,13 +41,6 @@ struct CompareView: View {
             case .heatPump: return "wind"
             }
         }
-    }
-    
-    enum Tier: String, CaseIterable, Identifiable {
-        case good = "Good"
-        case better = "Better"
-        case best = "Best"
-        var id: String { rawValue }
     }
     
     // For each Kind+Tier, try tier-specific asset first, then fall back to base
@@ -63,11 +63,7 @@ struct CompareView: View {
     }
     
     @State private var selection: Kind = .ac
-    @State private var tierSelection: Tier = .good
-    // Optional per-kind override so you can type the exact asset name if needed
-    @AppStorage("CompareACImageName") private var customACName: String = ""
-    @AppStorage("CompareFurnaceImageName") private var customFurnaceName: String = ""
-    @AppStorage("CompareHeatPumpImageName") private var customHeatPumpName: String = ""
+    @StateObject private var tierStore = TierPhotoSettingsStore.shared
 	#if os(iOS)
 	@State private var zoomImage: UIImage? = nil
 	#elseif os(macOS)
@@ -76,7 +72,7 @@ struct CompareView: View {
 	@State private var showZoom: Bool = false
     
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 0) {
             // Equipment type: AC, Furnace, Heat Pump
             Picker("Compare", selection: $selection) {
                 ForEach(Kind.allCases) { k in
@@ -84,89 +80,27 @@ struct CompareView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.bottom, 12)
             
-            // Tier: Good, Better, Best (for selected equipment type)
-            Picker("Tier", selection: $tierSelection) {
-                ForEach(Tier.allCases) { t in
-                    Text(t.rawValue).tag(t)
-                }
-            }
-            .pickerStyle(.segmented)
-            
-            // Optional quick override for asset name
-            HStack(spacing: 8) {
-                Text("Custom image name (optional)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                TextField("e.g. CompareACGood", text: customNameBinding)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 280)
-            }
-            
-            Card {
-                VStack(spacing: 12) {
-                    HStack {
-                        Text("\(selection.rawValue) — \(tierSelection.rawValue)")
-                            .font(.headline)
-                        Spacer()
-                    }
-					if let name = firstExistingImageName(for: selection, tier: tierSelection, custom: currentCustomName) {
-						Group {
-							#if os(iOS)
-							if let ui = UIImage(named: name) {
-								Image(uiImage: ui)
-									.resizable()
-									.scaledToFit()
-									.frame(maxHeight: 360)
-									.clipShape(RoundedRectangle(cornerRadius: 12))
-									.onTapGesture {
-										zoomImage = ui
-										showZoom = true
-									}
-							}
-							#elseif os(macOS)
-							if let ns = NSImage(named: name) {
-								Image(nsImage: ns)
-									.resizable()
-									.scaledToFit()
-									.frame(maxHeight: 360)
-									.clipShape(RoundedRectangle(cornerRadius: 12))
-									.onTapGesture {
-										zoomImage = ns
-										showZoom = true
-									}
-							}
-							#endif
-						}
-                        HStack {
-                            Spacer()
-                            Text("Showing asset: \(name)")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    } else {
-                        VStack(spacing: 10) {
-                            Image(systemName: selection.fallbackSymbol)
-                                .font(.system(size: 64, weight: .semibold))
-                                .foregroundStyle(.blue)
-                            Text("Add an asset named “\(selection.baseImageName)\(tierSelection.rawValue)” (e.g. CompareACGood, CompareFurnaceBetter) or set a custom name above.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                            Text("Tried: \(attemptedNames(for: selection, tier: tierSelection, custom: currentCustomName).joined(separator: ", "))")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                                .padding(.top, 4)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 240)
+            ScrollView {
+                VStack(spacing: 16) {
+                    ForEach(Tier.allCases) { tier in
+                        CompareTierCard(
+                            kind: selection,
+                            tier: tier,
+                            tierStore: tierStore,
+                            zoomImage: $zoomImage,
+                            showZoom: $showZoom,
+                            firstExistingImageName: { firstExistingImageName(for: $0, tier: $1) }
+                        )
                     }
                 }
+                .padding(.horizontal)
+                .padding(.bottom, 24)
             }
-            Spacer()
         }
-        .padding()
+        .padding(.vertical)
         .background(Color(.systemGroupedBackground))
 		.fullScreenCover(isPresented: $showZoom) {
 			ZStack {
@@ -200,34 +134,8 @@ struct CompareView: View {
 		}
     }
     
-    private var currentCustomName: String? {
-        switch selection {
-        case .ac: return customACName.isEmpty ? nil : customACName
-        case .furnace: return customFurnaceName.isEmpty ? nil : customFurnaceName
-        case .heatPump: return customHeatPumpName.isEmpty ? nil : customHeatPumpName
-        }
-    }
-    
-    private var customNameBinding: Binding<String> {
-        switch selection {
-        case .ac: return $customACName
-        case .furnace: return $customFurnaceName
-        case .heatPump: return $customHeatPumpName
-        }
-    }
-    
-    private func attemptedNames(for kind: Kind, tier: Tier, custom: String?) -> [String] {
-        var names: [String] = []
-        if let custom, !custom.isEmpty {
-            names.append(custom)
-        }
-        names.append(contentsOf: candidateAssetNames(for: kind, tier: tier))
-        var seen = Set<String>()
-        return names.filter { seen.insert($0).inserted }
-    }
-    
-    private func firstExistingImageName(for kind: Kind, tier: Tier, custom: String?) -> String? {
-        for name in attemptedNames(for: kind, tier: tier, custom: custom) {
+    private func firstExistingImageName(for kind: Kind, tier: Tier) -> String? {
+        for name in candidateAssetNames(for: kind, tier: tier) {
             #if os(iOS)
             if UIImage(named: name) != nil {
                 return name
@@ -242,6 +150,173 @@ struct CompareView: View {
     }
 }
 
+// MARK: - CompareTierCard (Good, Better, Best - stacked vertically)
+
+private struct CompareTierCard: View {
+    let kind: CompareView.Kind
+    let tier: Tier
+    @ObservedObject var tierStore: TierPhotoSettingsStore
+    @Binding var zoomImage: PlatformImage?
+    @Binding var showZoom: Bool
+    let firstExistingImageName: (CompareView.Kind, Tier) -> String?
+    
+    #if os(iOS)
+    typealias PlatformImage = UIImage
+    #elseif os(macOS)
+    typealias PlatformImage = NSImage
+    #endif
+    
+    private var category: TierPhotoCategory { kind.tierPhotoCategory }
+    private var photoData: Data? { tierStore.photoData(category: category, tier: tier) }
+    private var info: String { tierStore.info(category: category, tier: tier) }
+    private var linkStr: String { tierStore.link(category: category, tier: tier) }
+    
+    var body: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("\(kind.rawValue) — \(tier.displayName)")
+                    .font(.headline)
+                
+                // Photo
+                if let platformImg = platformImageFromData {
+                    photoView(platformImg)
+                        .onTapGesture {
+                            zoomImage = platformImg
+                            showZoom = true
+                        }
+                } else if let name = firstExistingImageName(kind, tier) {
+                    assetPhotoView(name: name)
+                } else {
+                    placeholderView
+                }
+                
+                // Information (from Settings)
+                if !info.isEmpty {
+                    Text(info)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                
+                // Clickable web link (from Settings) — each link opens assigned website
+                if !linkStr.isEmpty, let url = normalizedURL(linkStr) {
+                    Link(destination: url) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "link.circle.fill")
+                                .font(.title3)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(displayTextForLink(linkStr))
+                                    .font(.subheadline)
+                                    .lineLimit(2)
+                                Text("Tap to open website")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "safari")
+                                .font(.subheadline)
+                                .foregroundStyle(.blue)
+                        }
+                        .padding(12)
+                        .background(Color.accentColor.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func photoView(_ img: PlatformImage) -> some View {
+        #if os(iOS)
+        Image(uiImage: img)
+            .resizable()
+            .scaledToFit()
+            .frame(maxHeight: 280)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        #elseif os(macOS)
+        Image(nsImage: img)
+            .resizable()
+            .scaledToFit()
+            .frame(maxHeight: 280)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        #endif
+    }
+    
+    @ViewBuilder
+    private func assetPhotoView(name: String) -> some View {
+        #if os(iOS)
+        if let ui = UIImage(named: name) {
+            Image(uiImage: ui)
+                .resizable()
+                .scaledToFit()
+                .frame(maxHeight: 280)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .onTapGesture {
+                    zoomImage = ui
+                    showZoom = true
+                }
+        }
+        #elseif os(macOS)
+        if let ns = NSImage(named: name) {
+            Image(nsImage: ns)
+                .resizable()
+                .scaledToFit()
+                .frame(maxHeight: 280)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .onTapGesture {
+                    zoomImage = ns
+                    showZoom = true
+                }
+        }
+        #endif
+    }
+    
+    private var placeholderView: some View {
+        VStack(spacing: 10) {
+            Image(systemName: kind.fallbackSymbol)
+                .font(.system(size: 48, weight: .semibold))
+                .foregroundStyle(.blue)
+            Text("Add photo in Settings > Good, Better, Best Photos")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
+    }
+    
+    private var platformImageFromData: PlatformImage? {
+        guard let data = photoData else { return nil }
+        #if os(iOS)
+        return UIImage(data: data)
+        #elseif os(macOS)
+        return NSImage(data: data)
+        #endif
+    }
+    
+    /// Ensures URL has scheme so it opens correctly (e.g. www.carrier.com → https://www.carrier.com)
+    private func normalizedURL(_ raw: String) -> URL? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if trimmed.lowercased().hasPrefix("http://") || trimmed.lowercased().hasPrefix("https://") {
+            return URL(string: trimmed)
+        }
+        return URL(string: "https://" + trimmed)
+    }
+    
+    private func displayTextForLink(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.lowercased().hasPrefix("https://") {
+            return String(trimmed.dropFirst(8))
+        }
+        if trimmed.lowercased().hasPrefix("http://") {
+            return String(trimmed.dropFirst(7))
+        }
+        return trimmed.isEmpty ? "Website" : trimmed
+    }
+}
+
 private struct Card<Content: View>: View {
     @ViewBuilder let content: () -> Content
     var body: some View {
@@ -249,6 +324,7 @@ private struct Card<Content: View>: View {
             content()
         }
         .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 6)
@@ -261,5 +337,3 @@ private struct Card<Content: View>: View {
 #Preview {
     CompareView()
 }
-
-
