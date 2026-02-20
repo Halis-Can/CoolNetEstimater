@@ -225,84 +225,7 @@ struct EstimateView: View {
             }
             
             Section("Totals") {
-                HStack {
-                    Text("Additional Equipment Subtotal")
-                    Spacer()
-                    Text(formatCurrency(estimateVM.currentEstimate.addOnsSubtotal))
-                }
-                Divider()
-                let grandTotal = estimateVM.currentEstimate.grandTotal
-                let paymentOption = PaymentOption(rawValue: paymentOptionRaw) ?? .cashCheckZelle
-                if paymentOption == .creditCard {
-                    HStack {
-                        Text("Grand Total")
-                        Spacer()
-                        Text(formatCurrency(grandTotal))
-                    }
-                    HStack {
-                        Text("Credit Card Fee (3.5%)")
-                            .bold()
-                        Spacer()
-                        Text(formatCurrency(grandTotal * (creditCardFeePercent / 100.0)))
-                            .bold()
-                    }
-                    Divider()
-                }
-                Group {
-                    switch paymentOption {
-                    case .cashCheckZelle:
-                        HStack {
-                            Text("Grand Total").bold()
-                            Spacer()
-                            Text(formatCurrency(grandTotal)).bold()
-                        }
-                    case .creditCard:
-                        HStack {
-                            Text("Total").bold()
-                            Spacer()
-                            Text(formatCurrency(grandTotal * (1 + creditCardFeePercent / 100.0))).bold()
-                        }
-                    case .finance:
-                        let totalWithMarkup = grandTotal * (1 + (financeMarkupPercent / 100.0))
-                        let monthly = estimateFinanceMonthly(total: totalWithMarkup, ratePercent: financeRatePercent, termMonths: financeTermMonths)
-                        let financeGrandTotal = monthly.map { $0 * Double(financeTermMonths) }
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text("Grand Total").bold()
-                                Spacer()
-                                Text(formatCurrency(financeGrandTotal ?? totalWithMarkup)).bold()
-                            }
-                            if let mo = monthly, mo > 0 {
-                                HStack {
-                                    Text("Monthly payment").font(.subheadline).foregroundStyle(.secondary)
-                                    Spacer()
-                                    Text("\(formatCurrency(mo))/mo").font(.subheadline.bold())
-                                }
-                            }
-                        }
-                    }
-                }
-                Divider()
-                // Cash Discount – nakit/çek/Zelle farkı
-                let financeMarkupAmount = grandTotal * (financeMarkupPercent / 100.0)
-                if financeMarkupAmount > 0 {
-                    HStack {
-                        Text("Cash Discount – Credit")
-                            .font(.subheadline)
-                        Spacer()
-                        Text("- \(formatCurrency(financeMarkupAmount))")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    Divider()
-                    HStack {
-                        Text("Sub-Total (Cash/Check/Zelle)")
-                            .font(.subheadline.bold())
-                        Spacer()
-                        Text(formatCurrency(grandTotal))
-                            .font(.subheadline.bold())
-                    }
-                }
+                estimateTotalsContent
             }
         }
         .navigationDestination(for: UUID.self) { systemId in
@@ -372,7 +295,189 @@ struct EstimateView: View {
         guard denominator != 0 else { return nil }
         return total * monthlyRate / denominator
     }
-    
+
+    private var estimateDisplayTotal: Double {
+        let grandTotal = estimateVM.currentEstimate.grandTotal
+        let option = PaymentOption(rawValue: paymentOptionRaw) ?? .cashCheckZelle
+        switch option {
+        case .cashCheckZelle: return grandTotal
+        case .creditCard: return grandTotal * (1 + creditCardFeePercent / 100.0)
+        case .finance:
+            let totalWithMarkup = grandTotal * (1 + (financeMarkupPercent / 100.0))
+            guard let monthly = estimateFinanceMonthly(total: totalWithMarkup, ratePercent: financeRatePercent, termMonths: financeTermMonths) else { return totalWithMarkup }
+            return monthly * Double(financeTermMonths)
+        }
+    }
+
+    private var estimateMonthlyPaymentText: String {
+        let grandTotal = estimateVM.currentEstimate.grandTotal
+        let totalWithMarkup = grandTotal * (1 + (financeMarkupPercent / 100.0))
+        guard let value = estimateFinanceMonthly(total: totalWithMarkup, ratePercent: financeRatePercent, termMonths: financeTermMonths) else { return "—" }
+        return formatCurrency(value)
+    }
+
+    /// Totals section styled like Your Selection: Grand Total (rectangle), Financing Plan box, Cash Discount box.
+    @ViewBuilder
+    private var estimateTotalsContent: some View {
+        let grandTotal = estimateVM.currentEstimate.grandTotal
+        let paymentOption = PaymentOption(rawValue: paymentOptionRaw) ?? .cashCheckZelle
+        let financeMarkupAmount = grandTotal * (financeMarkupPercent / 100.0)
+
+        Text("Payment: \(paymentOption.displayName)")
+            .font(.subheadline.bold())
+            .foregroundStyle(.secondary)
+            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 4, trailing: 20))
+
+        HStack {
+            Text("Additional Equipment Subtotal")
+            Spacer()
+            Text(formatCurrency(estimateVM.currentEstimate.addOnsSubtotal))
+        }
+
+        if paymentOption == .creditCard {
+            HStack {
+                Text("Grand Total")
+                Spacer()
+                Text(formatCurrency(grandTotal))
+            }
+            HStack {
+                Text("Credit Card Fee (\(creditCardFeePercent, specifier: "%.1f")%)")
+                    .bold()
+                Spacer()
+                Text(formatCurrency(grandTotal * (creditCardFeePercent / 100.0)))
+                    .bold()
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            .background(RoundedRectangle(cornerRadius: 8).stroke(Color.accentColor.opacity(0.6), lineWidth: 1))
+        }
+
+        if paymentOption == .finance, financeMarkupAmount > 0 {
+            HStack {
+                Text("Cash Discount – Credit")
+                    .font(.subheadline)
+                Spacer()
+                Text("- \(formatCurrency(financeMarkupAmount))")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            .background(RoundedRectangle(cornerRadius: 8).stroke(Color.green.opacity(0.6), lineWidth: 1))
+            HStack {
+                Text("Sub-Total (Cash/Check/Zelle)")
+                    .bold()
+                Spacer()
+                Text(formatCurrency(grandTotal))
+                    .font(.subheadline.bold())
+            }
+        }
+
+        HStack(alignment: .center) {
+            Text(paymentOption == .creditCard ? "Total" : "Grand Total")
+                .font(.title2)
+                .fontWeight(.bold)
+            Spacer()
+            Text(formatCurrency(estimateDisplayTotal))
+                .font(.title)
+                .fontWeight(.bold)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.blue.opacity(0.12)))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.blue.opacity(0.5), lineWidth: 1.5))
+        }
+
+        if paymentOption == .finance {
+            HStack(alignment: .center) {
+                Text("Financing Plan / \(financeTermMonths) Months")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.purple)
+                Spacer()
+                Text("\(estimateMonthlyPaymentText)/mo")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.primary)
+            }
+            .padding(.vertical, 14)
+            .padding(.horizontal, 16)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color.purple.opacity(0.12)))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.purple.opacity(0.5), lineWidth: 2))
+            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+        }
+
+        estimateCashDiscountBox(paymentOption: paymentOption, grandTotal: grandTotal)
+            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            .listRowBackground(Color.clear)
+    }
+
+    @ViewBuilder
+    private func estimateCashDiscountBox(paymentOption: PaymentOption, grandTotal: Double) -> some View {
+        let totalWithMarkup = grandTotal * (1 + (financeMarkupPercent / 100.0))
+        let discountAmount: Double = {
+            switch paymentOption {
+            case .finance:
+                return max(0, estimateDisplayTotal - grandTotal)
+            case .creditCard:
+                return grandTotal * (creditCardFeePercent / 100.0)
+            case .cashCheckZelle:
+                return totalWithMarkup - grandTotal
+            }
+        }()
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center) {
+                HStack(spacing: 8) {
+                    Image(systemName: "banknote.fill")
+                        .font(.title2)
+                        .foregroundStyle(.blue)
+                    Text("Cash Discount")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+                }
+                Spacer(minLength: 12)
+                if discountAmount > 0 {
+                    Text(formatCurrency(discountAmount))
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.primary)
+                }
+            }
+            if discountAmount > 0, paymentOption == .finance {
+                Divider()
+                    .background(Color.blue)
+                    .padding(.vertical, 4)
+                HStack(alignment: .center) {
+                    Text("Cash price (if you choose Cash Discount):")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Text(formatCurrency(grandTotal))
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.blue.opacity(0.12)))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.blue.opacity(0.5), lineWidth: 1.5))
+                }
+            } else if discountAmount > 0 {
+                Text("Pay \(formatCurrency(grandTotal)) by cash, check, or Zelle — save \(formatCurrency(discountAmount)).")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Pay \(formatCurrency(grandTotal)) by cash, check, or Zelle.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.blue.opacity(0.08)))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.blue.opacity(0.4), lineWidth: 2))
+    }
+
     private func generatePDF() {
         pdfData = EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
     }
