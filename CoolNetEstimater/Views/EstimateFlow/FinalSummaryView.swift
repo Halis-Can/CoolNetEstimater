@@ -13,6 +13,7 @@ private let creditCardFeePercent: Double = 3.5
 
 struct FinalSummaryView: View {
     @EnvironmentObject var estimateVM: EstimateViewModel
+    @EnvironmentObject var settingsVM: SettingsViewModel
     @AppStorage("payment_option") private var paymentOptionRaw: String = PaymentOption.cashCheckZelle.rawValue
     @AppStorage("tier_good_visible") private var tierGoodVisible: Bool = true
     @AppStorage("tier_better_visible") private var tierBetterVisible: Bool = true
@@ -86,6 +87,9 @@ struct FinalSummaryView: View {
         }
         .background(Color(.systemBackground))
         .id(companyInfoId) // Force refresh when company info changes
+        .onAppear {
+            estimateVM.attachTemplates(settingsVM.addOnTemplates)
+        }
         .fullScreenCover(isPresented: $showingDecisionPage) {
             Group {
                 if let tier = selectedTierForNext {
@@ -321,7 +325,7 @@ struct FinalSummaryView: View {
                                     Text(addon.description).font(.system(size: 9)).foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                Text(formatCurrency(addon.price)).font(.system(size: 10)).bold()
+                                Text(formatCurrency(addon.lineTotal)).font(.system(size: 10)).bold()
                             }
                             .padding(4)
                             .background(Color(UIColor.secondarySystemBackground))
@@ -377,7 +381,7 @@ struct FinalSummaryView: View {
         private var addOnsSubtotal: Double {
             var total: Double = 0
             for a in estimateVM.currentEstimate.addOns {
-                if a.enabled { total += a.price }
+                if a.enabled { total += a.lineTotal }
             }
             return total
         }
@@ -638,7 +642,7 @@ struct FinalSummaryView: View {
                                         Text(addon.description).font(.system(size: 8)).foregroundStyle(.secondary)
                                     }
                                     Spacer()
-                                    Text(formatCurrency(addon.price)).font(.system(size: 9)).bold()
+                                    Text(formatCurrency(addon.lineTotal)).font(.system(size: 9)).bold()
                                 }
                                 .padding(4)
                                 .background(Color(UIColor.secondarySystemBackground))
@@ -676,7 +680,7 @@ struct FinalSummaryView: View {
         private var addOnsSubtotal: Double {
             var total: Double = 0
             for a in estimateVM.currentEstimate.addOns {
-                if a.enabled && a.systemId == system.id { total += a.price }
+                if a.enabled && a.systemId == system.id { total += a.lineTotal }
             }
             return total
         }
@@ -833,7 +837,7 @@ struct FinalSummaryView: View {
                             Text(addon.description).font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Text(formatCurrency(addon.price)).bold()
+                        Text(formatCurrency(addon.lineTotal)).bold()
                     }
                     .padding(.vertical, 4)
                 }
@@ -926,7 +930,7 @@ struct FinalSummaryView: View {
                             HStack(alignment: .firstTextBaseline) {
                                 Text(addon.name).font(.caption)
                                 Spacer()
-                                Text(formatCurrency(addon.price)).font(.caption).bold()
+                                Text(formatCurrency(addon.lineTotal)).font(.caption).bold()
                             }
                         }
                     }
@@ -997,7 +1001,7 @@ struct FinalSummaryView: View {
     }
     
     private func addOnsSubtotal(for system: EstimateSystem) -> Double {
-        addOnsForSystem(system).map { $0.price }.reduce(0, +)
+        addOnsForSystem(system).map { $0.lineTotal }.reduce(0, +)
     }
     
     private func monthlyPaymentText(for total: Double) -> String {
@@ -1084,7 +1088,7 @@ struct DecisionOptionPageView: View {
     }
     
     private var addOnsSubtotal: Double {
-        estimateVM.currentEstimate.addOns.filter { $0.enabled }.reduce(0) { $0 + $1.price }
+        estimateVM.currentEstimate.addOns.filter { $0.enabled }.reduce(0) { $0 + $1.lineTotal }
     }
     
     private var optionSum: Double {
@@ -1099,12 +1103,17 @@ struct DecisionOptionPageView: View {
         totalIncludingAddOns * (1 + (financeMarkupPercent / 100.0))
     }
     
+    /// When Finance: total amount customer pays over the term (monthly × term). Otherwise same as total/card total.
     private var displayTotal: Double {
         let paymentOption = PaymentOption(rawValue: paymentOptionRaw) ?? .cashCheckZelle
         switch paymentOption {
         case .cashCheckZelle: return totalIncludingAddOns
         case .creditCard: return totalIncludingAddOns * (1 + creditCardFeePercent / 100.0)
-        case .finance: return totalWithMarkup
+        case .finance:
+            guard let monthly = financeMonthlyPayment(total: totalWithMarkup, ratePercent: financeRatePercent, termMonths: financeTermMonths) else {
+                return totalWithMarkup
+            }
+            return monthly * Double(financeTermMonths)
         }
     }
     
@@ -1151,113 +1160,171 @@ struct DecisionOptionPageView: View {
                 )
             }
 
-            // Total with Finance (e.g. 60 months) – primary total when financing
-            if paymentOption == .finance {
+            if paymentOption == .finance, financeMarkupAmount > 0 {
                 HStack {
-                    Text("Total with Finance (\(financeTermMonths) months)")
+                    Text("Cash Discount – Credit")
+                        .font(.subheadline)
+                    Spacer()
+                    Text("- \(formatCurrency(financeMarkupAmount))")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 6)
+                .padding(.horizontal, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.green.opacity(0.6), lineWidth: 1)
+                )
+                HStack {
+                    Text("Sub-Total (Cash/Check/Zelle)")
                         .bold()
                     Spacer()
-                    Text(formatCurrency(totalWithMarkup))
-                        .font(.title3.bold())
+                    Text(formatCurrency(totalIncludingAddOns))
+                        .font(.subheadline.bold())
                 }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Financing Plan")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    HStack {
-                        Spacer()
-                        Text("\(financeTermMonths) months – \(selectionMonthlyPaymentText)/month")
-                            .font(.subheadline.bold())
-                            .foregroundStyle(Color.primary.opacity(0.9))
-                    }
-                    .padding(.vertical, 10)
+            }
+
+            HStack(alignment: .center) {
+                Text(paymentOption == .creditCard ? "Total" : "Grand Total")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Spacer()
+                Text(formatCurrency(displayTotal))
+                    .font(.title)
+                    .fontWeight(.bold)
                     .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
                     .background(
                         RoundedRectangle(cornerRadius: 8)
-                            .fill(Color(UIColor.secondarySystemBackground))
+                            .fill(Color.blue.opacity(0.12))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)
+                            .stroke(Color.blue.opacity(0.5), lineWidth: 1.5)
                     )
-                }
-                // Cash Discount – Credit: difference if customer paid cash/Zelle
-                if financeMarkupAmount > 0 {
-                    HStack {
-                        Text("Cash Discount – Credit")
-                            .font(.subheadline)
-                        Spacer()
-                        Text("- \(formatCurrency(financeMarkupAmount))")
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.green.opacity(0.6), lineWidth: 1)
-                    )
-                    HStack {
-                        Text("Sub-Total (Cash/Check/Zelle)")
-                            .bold()
-                        Spacer()
-                        Text(formatCurrency(totalIncludingAddOns))
-                            .font(.subheadline.bold())
-                    }
-                }
             }
 
-            HStack {
-                Text(paymentOption == .creditCard ? "Total" : "Grand Total")
-                    .bold()
-                Spacer()
-                Text(formatCurrency(displayTotal))
-                    .font(.title3.bold())
+            if paymentOption == .finance {
+                HStack(alignment: .center) {
+                    Text("Financing Plan / \(financeTermMonths) Months")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.purple)
+                    Spacer()
+                    Text("\(selectionMonthlyPaymentText)/mo")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.primary)
+                }
+                .padding(.vertical, 14)
+                .padding(.horizontal, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.purple.opacity(0.12))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.purple.opacity(0.5), lineWidth: 2)
+                )
+                .padding(.top, 4)
             }
 
-            // Prominent Cash / Check / Zelle option so customer sees the cash alternative
             cashPaymentOptionBox
         }
     }
 
-    /// Large, prominent box: Cash / Check / Zelle – pay this amount and save finance/card fees (like "CASH PAID" on invoice).
+    /// Cash Discount box: "Cash Discount" title with discount amount large and dark, right-aligned.
     private var cashPaymentOptionBox: some View {
         let paymentOption = PaymentOption(rawValue: paymentOptionRaw) ?? .cashCheckZelle
-        let savings = financeMarkupAmount
-        let cardFee = totalIncludingAddOns * (creditCardFeePercent / 100.0)
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: "banknote.fill")
-                    .font(.title2)
-                    .foregroundStyle(.green)
-                Text("Cash / Check / Zelle Transfer")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-            }
-            Text("Pay \(formatCurrency(totalIncludingAddOns)) by cash, check, or Zelle — no finance charges.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            if savings > 0 {
-                Text("Save \(formatCurrency(savings)) compared to \(financeTermMonths)-month financing.")
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.green)
-            }
-            if paymentOption == .creditCard, cardFee > 0 {
-                Text("Save \(formatCurrency(cardFee)) by avoiding the credit card fee.")
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.green)
-            }
+        let discount = cashDiscountAmount(paymentOption: paymentOption)
+        let financedTotal = paymentOption == .finance ? displayTotal : totalWithMarkup
+        return VStack(alignment: .leading, spacing: 12) {
+            cashPaymentOptionBoxHeader(discountAmount: discount)
+            cashPaymentOptionBoxBody(paymentOption: paymentOption, discountAmount: discount, financedGrandTotal: financedTotal)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.green.opacity(0.08))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.green.opacity(0.4), lineWidth: 2)
-        )
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.blue.opacity(0.08)))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.blue.opacity(0.4), lineWidth: 2))
+    }
+
+    private func cashDiscountAmount(paymentOption: PaymentOption) -> Double {
+        switch paymentOption {
+        case .finance: return max(0, displayTotal - totalIncludingAddOns)
+        case .creditCard: return totalIncludingAddOns * (creditCardFeePercent / 100.0)
+        case .cashCheckZelle: return totalWithMarkup - totalIncludingAddOns
+        }
+    }
+
+    private func cashPaymentOptionBoxHeader(discountAmount: Double) -> some View {
+        HStack(alignment: .center) {
+            HStack(spacing: 8) {
+                Image(systemName: "banknote.fill")
+                    .font(.title2)
+                    .foregroundStyle(.blue)
+                Text("Cash Discount")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
+            }
+            Spacer(minLength: 12)
+            if discountAmount > 0 {
+                Text(formatCurrency(discountAmount))
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.primary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func cashPaymentOptionBoxBody(paymentOption: PaymentOption, discountAmount: Double, financedGrandTotal: Double) -> some View {
+        let cardFee = totalIncludingAddOns * (creditCardFeePercent / 100.0)
+        if discountAmount > 0, paymentOption == .finance {
+            cashPaymentOptionBoxFinanceContent(discountAmount: discountAmount, financedGrandTotal: financedGrandTotal)
+        } else if discountAmount > 0, paymentOption == .creditCard {
+            Text("Pay \(formatCurrency(totalIncludingAddOns)) by cash, check, or Zelle — save \(formatCurrency(cardFee)) (no card fee).")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        } else if discountAmount > 0 {
+            Text("Pay \(formatCurrency(totalIncludingAddOns)) by cash, check, or Zelle — no finance charges.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        } else {
+            Text("Pay \(formatCurrency(totalIncludingAddOns)) by cash, check, or Zelle.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func cashPaymentOptionBoxFinanceContent(discountAmount: Double, financedGrandTotal: Double) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Divider()
+                .background(Color.blue)
+                .padding(.vertical, 4)
+            HStack(alignment: .center) {
+                Text("Cash price (if you choose Cash Discount):")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.primary)
+                Spacer()
+                Text(formatCurrency(totalIncludingAddOns))
+                    .font(.title)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.blue.opacity(0.12))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.blue.opacity(0.5), lineWidth: 1.5)
+                    )
+            }
+        }
+        .padding(.top, 4)
     }
     
     /// Full page content (header through Approved) for JPEG export — same layout as on screen so share shows all details.
@@ -1309,7 +1376,7 @@ struct DecisionOptionPageView: View {
                                     Text(addon.description).font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                Text(formatCurrency(addon.price)).bold()
+                                Text(formatCurrency(addon.lineTotal)).bold()
                             }
                             .padding(8)
                             .background(Color(UIColor.secondarySystemBackground))

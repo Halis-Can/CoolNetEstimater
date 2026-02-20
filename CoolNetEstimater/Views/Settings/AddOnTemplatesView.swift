@@ -31,11 +31,7 @@ struct AddOnTemplatesView: View {
                                     .foregroundStyle(.secondary)
                                 TextField("0", value: Binding(
                                     get: { settingsVM.addOnTemplates.first(where: { $0.id == tmpl.id })?.defaultPrice ?? tmpl.defaultPrice },
-                                    set: { newVal in
-                                        if let idx = settingsVM.addOnTemplates.firstIndex(where: { $0.id == tmpl.id }) {
-                                            settingsVM.addOnTemplates[idx].defaultPrice = newVal
-                                        }
-                                    }
+                                    set: { newVal in settingsVM.setAddOnTemplateDefaultPrice(id: tmpl.id, defaultPrice: newVal) }
                                 ), formatter: currencyFormatter)
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
@@ -56,7 +52,7 @@ struct AddOnTemplatesView: View {
                         }
                         .buttonStyle(.bordered)
                         Button(role: .destructive) {
-                            settingsVM.addOnTemplates.removeAll { $0.id == tmpl.id }
+                            settingsVM.removeAddOnTemplate(id: tmpl.id)
                         } label: {
                             Image(systemName: "trash")
                                 .imageScale(.medium)
@@ -66,7 +62,7 @@ struct AddOnTemplatesView: View {
                     .contentShape(Rectangle())
                 }
                 .onDelete { set in
-                    settingsVM.addOnTemplates.remove(atOffsets: set)
+                    settingsVM.removeAddOnTemplates(atOffsets: set)
                 }
                 Button {
                     editTemplate = AddOnTemplate(name: "", description: "", defaultPrice: 0, enabled: true, freeWhenTierIsBest: false)
@@ -86,27 +82,24 @@ struct AddOnTemplatesView: View {
                 AddOnTemplateEditor(template: binding, isNew: false, onSave: nil)
             } else if let newTmpl = editTemplate {
                 AddOnTemplateCreator(initial: newTmpl) { created in
-                    settingsVM.addOnTemplates.append(created)
+                    settingsVM.appendAddOnTemplate(created)
                 }
             }
         }
     }
     
     private func bindingForTemplate(_ id: UUID?) -> Binding<AddOnTemplate>? {
-        guard let id, let idx = settingsVM.addOnTemplates.firstIndex(where: { $0.id == id }) else { return nil }
+        guard let id, settingsVM.addOnTemplates.contains(where: { $0.id == id }) else { return nil }
         return Binding(
-            get: { settingsVM.addOnTemplates[idx] },
-            set: { settingsVM.addOnTemplates[idx] = $0 }
+            get: { settingsVM.addOnTemplates.first(where: { $0.id == id }) ?? AddOnTemplate(name: "", description: "", defaultPrice: 0, enabled: true) },
+            set: { settingsVM.replaceAddOnTemplate(id: id, with: $0) }
         )
     }
     
     private func bindingForTemplateEnabled(_ id: UUID) -> Binding<Bool> {
         Binding(
             get: { settingsVM.addOnTemplates.first(where: { $0.id == id })?.enabled ?? true },
-            set: { newValue in
-                guard let idx = settingsVM.addOnTemplates.firstIndex(where: { $0.id == id }) else { return }
-                settingsVM.addOnTemplates[idx].enabled = newValue
-            }
+            set: { newValue in settingsVM.setAddOnTemplateEnabled(id: id, enabled: newValue) }
         )
     }
 }

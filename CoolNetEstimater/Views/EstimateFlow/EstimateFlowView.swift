@@ -95,8 +95,8 @@ struct EstimateFlowView: View {
         .onAppear {
             if estimateVM.currentEstimate.systems.isEmpty {
                 estimateVM.ensureSystemCount(1, settingsVM: settingsVM)
-                estimateVM.attachTemplates(settingsVM.addOnTemplates)
             }
+            estimateVM.attachTemplates(settingsVM.addOnTemplates)
         }
     }
     
@@ -627,7 +627,7 @@ private struct AdditionalEquipmentScreen: View {
                                 }
                             }
                             Spacer()
-                            Text(formatCurrency(addon.price))
+                            Text(formatCurrency(addon.lineTotal))
                                 .frame(width: 120, alignment: .trailing)
                         }
                     }

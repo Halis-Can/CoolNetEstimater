@@ -146,7 +146,7 @@ struct PrintableSummaryView: View {
                                         Text(addon.description).font(.caption).foregroundStyle(.secondary)
                                     }
                                     Spacer()
-                                    Text(formatCurrency(addon.price)).bold()
+                                    Text(formatCurrency(addon.lineTotal)).bold()
                                 }
                                 .padding(6)
                                 .background(Color(UIColor.secondarySystemBackground))
@@ -188,7 +188,7 @@ struct PrintableSummaryView: View {
             estimate.addOns.filter { $0.enabled }
         }
         private var addOnsSubtotal: Double {
-            enabledAddOns.map { $0.price }.reduce(0, +)
+            enabledAddOns.map { $0.lineTotal }.reduce(0, +)
         }
         private var optionSum: Double {
             systemsWithOption.map { $0.1.price }.reduce(0, +)

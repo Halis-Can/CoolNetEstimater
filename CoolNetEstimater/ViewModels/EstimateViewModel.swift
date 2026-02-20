@@ -164,7 +164,7 @@ final class EstimateViewModel: ObservableObject {
         }
         
         let addOnInstances: [AddOn] = addOns.map { tmpl in
-            AddOn(id: UUID(), templateId: tmpl.id, name: tmpl.name, description: tmpl.description, enabled: tmpl.enabled, price: tmpl.defaultPrice)
+            AddOn(id: UUID(), templateId: tmpl.id, name: tmpl.name, description: tmpl.description, enabled: tmpl.enabled, price: tmpl.defaultPrice, quantity: 1)
         }
         
         currentEstimate = Estimate(systems: systems, addOns: addOnInstances)
@@ -194,7 +194,7 @@ final class EstimateViewModel: ObservableObject {
         }
         isInternalMutation = false
         
-        let addOnsSubtotal = currentEstimate.addOns.filter { $0.enabled }.map { $0.price }.reduce(0, +)
+        let addOnsSubtotal = currentEstimate.addOns.filter { $0.enabled }.map { $0.lineTotal }.reduce(0, +)
         
         isInternalMutation = true
         currentEstimate.systemsSubtotal = systemsSubtotal
@@ -236,8 +236,9 @@ final class EstimateViewModel: ObservableObject {
                         systemId: system.id,
                         name: tmpl.name,
                         description: tmpl.description,
-                        enabled: existing.enabled, // keep user's toggle for this system
-                        price: tmpl.defaultPrice
+                        enabled: existing.enabled,
+                        price: tmpl.defaultPrice,
+                        quantity: existing.quantity
                     ))
                 } else {
                     rebuilt.append(AddOn(
@@ -247,7 +248,8 @@ final class EstimateViewModel: ObservableObject {
                         name: tmpl.name,
                         description: tmpl.description,
                         enabled: tmpl.enabled,
-                        price: tmpl.defaultPrice
+                        price: tmpl.defaultPrice,
+                        quantity: 1
                     ))
                 }
             }
@@ -326,7 +328,7 @@ final class EstimateViewModel: ObservableObject {
     }
     
     func addAddOn(from template: AddOnTemplate) {
-        let addOn = AddOn(id: UUID(), templateId: template.id, name: template.name, description: template.description, enabled: true, price: template.defaultPrice)
+        let addOn = AddOn(id: UUID(), templateId: template.id, name: template.name, description: template.description, enabled: true, price: template.defaultPrice, quantity: 1)
         currentEstimate.addOns.append(addOn)
         attachTemplates([template]) // update price maps incrementally
         recalculateTotals()
@@ -342,6 +344,13 @@ final class EstimateViewModel: ObservableObject {
     func setAddOnEnabled(_ addOnId: UUID, enabled: Bool) {
         guard let idx = currentEstimate.addOns.firstIndex(where: { $0.id == addOnId }) else { return }
         currentEstimate.addOns[idx].enabled = enabled
+        recalculateTotals()
+        persistEstimate()
+    }
+
+    func setAddOnQuantity(_ addOnId: UUID, quantity: Int) {
+        guard let idx = currentEstimate.addOns.firstIndex(where: { $0.id == addOnId }) else { return }
+        currentEstimate.addOns[idx].quantity = max(1, quantity)
         recalculateTotals()
         persistEstimate()
     }
@@ -370,7 +379,7 @@ final class EstimateViewModel: ObservableObject {
             lines.append("- None")
         } else {
             for addOn in enabledAddOns {
-                lines.append("- \(addOn.name): \(formatCurrency(addOn.price))")
+                lines.append("- \(addOn.name): \(formatCurrency(addOn.lineTotal))")
             }
         }
         lines.append("")

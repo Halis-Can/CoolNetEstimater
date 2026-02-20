@@ -112,7 +112,7 @@ final class AppDataStore: ObservableObject {
     
     func addAddOn(from template: AddOnTemplate) {
         let price: Double = template.freeWhenTierIsBest && isAnyBestSelected ? 0 : template.defaultPrice
-        let addon = AddOn(id: UUID(), templateId: template.id, name: template.name, description: template.description, enabled: true, price: price)
+        let addon = AddOn(id: UUID(), templateId: template.id, name: template.name, description: template.description, enabled: true, price: price, quantity: 1)
         currentEstimate.addOns.append(addon)
     }
     
@@ -147,7 +147,7 @@ final class AppDataStore: ObservableObject {
                 currentEstimate.addOns[index].price = template.defaultPrice
             }
         }
-        addOnsSubtotal = currentEstimate.addOns.filter { $0.enabled }.map { $0.price }.reduce(0, +)
+        addOnsSubtotal = currentEstimate.addOns.filter { $0.enabled }.map { $0.lineTotal }.reduce(0, +)
         
         currentEstimate.systemsSubtotal = systemsSubtotal
         currentEstimate.addOnsSubtotal = addOnsSubtotal

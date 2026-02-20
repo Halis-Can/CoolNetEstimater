@@ -181,14 +181,17 @@ struct AddOnTemplate: Identifiable, Codable {
     var defaultPrice: Double
     var enabled: Bool
     var freeWhenTierIsBest: Bool
-    
+    /// When true, estimate line shows quantity; total = defaultPrice * quantity.
+    var useQuantity: Bool
+
     init(
         id: UUID = UUID(),
         name: String,
         description: String,
         defaultPrice: Double,
         enabled: Bool = true,
-        freeWhenTierIsBest: Bool = false
+        freeWhenTierIsBest: Bool = false,
+        useQuantity: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -196,6 +199,22 @@ struct AddOnTemplate: Identifiable, Codable {
         self.defaultPrice = defaultPrice
         self.enabled = enabled
         self.freeWhenTierIsBest = freeWhenTierIsBest
+        self.useQuantity = useQuantity
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, description, defaultPrice, enabled, freeWhenTierIsBest, useQuantity
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        description = try c.decode(String.self, forKey: .description)
+        defaultPrice = try c.decode(Double.self, forKey: .defaultPrice)
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        freeWhenTierIsBest = try c.decodeIfPresent(Bool.self, forKey: .freeWhenTierIsBest) ?? false
+        useQuantity = try c.decodeIfPresent(Bool.self, forKey: .useQuantity) ?? false
     }
 }
 
@@ -206,7 +225,49 @@ struct AddOn: Identifiable, Codable {
     var name: String
     var description: String
     var enabled: Bool
+    /// Unit price (per single item).
     var price: Double
+    /// Quantity; line total = price * quantity. Default 1 for backward compatibility.
+    var quantity: Int
+
+    /// Line total for this add-on (price × quantity).
+    var lineTotal: Double { price * Double(max(1, quantity)) }
+
+    init(
+        id: UUID = UUID(),
+        templateId: UUID? = nil,
+        systemId: UUID? = nil,
+        name: String,
+        description: String,
+        enabled: Bool = true,
+        price: Double,
+        quantity: Int = 1
+    ) {
+        self.id = id
+        self.templateId = templateId
+        self.systemId = systemId
+        self.name = name
+        self.description = description
+        self.enabled = enabled
+        self.price = price
+        self.quantity = max(1, quantity)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, templateId, systemId, name, description, enabled, price, quantity
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        templateId = try c.decodeIfPresent(UUID.self, forKey: .templateId)
+        systemId = try c.decodeIfPresent(UUID.self, forKey: .systemId)
+        name = try c.decode(String.self, forKey: .name)
+        description = try c.decode(String.self, forKey: .description)
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        price = try c.decode(Double.self, forKey: .price)
+        quantity = try c.decodeIfPresent(Int.self, forKey: .quantity) ?? 1
+    }
 }
 
 enum EstimateStatus: String, Codable {

@@ -91,7 +91,7 @@ struct EstimatePDFRenderer {
             return
         }
         for addon in estimate.addOns where addon.enabled {
-            let line = "- \(addon.name): \(formatCurrency(addon.price))"
+            let line = "- \(addon.name): \(formatCurrency(addon.lineTotal))"
             line.draw(at: CGPoint(x: 48, y: y), withAttributes: [.font: UIFont.systemFont(ofSize: 13)])
             y += 20
         }
@@ -200,7 +200,7 @@ struct EstimatePDFRenderer {
             return
         }
         for addon in estimate.addOns where addon.enabled {
-            let line = "- \(addon.name): \(formatCurrency(addon.price))"
+            let line = "- \(addon.name): \(formatCurrency(addon.lineTotal))"
             let lineString = NSAttributedString(string: line, attributes: [.font: systemFont])
             lineString.draw(at: CGPoint(x: 48, y: y))
             y -= 20

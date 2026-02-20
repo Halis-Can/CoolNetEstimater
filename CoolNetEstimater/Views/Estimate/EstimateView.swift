@@ -15,6 +15,8 @@ struct EstimateView: View {
     @EnvironmentObject var estimateVM: EstimateViewModel
     @AppStorage("payment_option") private var paymentOptionRaw: String = PaymentOption.cashCheckZelle.rawValue
     @AppStorage("finance_markup_percent") private var financeMarkupPercent: Double = 0.0
+    @AppStorage("finance_rate_percent") private var financeRatePercent: Double = 0.0
+    @AppStorage("finance_term_months") private var financeTermMonths: Int = 12
     @State private var showingAddOnSheet: Bool = false
     @State private var showingActivity: Bool = false
     @State private var showingMail: Bool = false
@@ -28,6 +30,9 @@ struct EstimateView: View {
             detailPane
         }
         .navigationTitle("Estimate")
+        .onAppear {
+            estimateVM.attachTemplates(settingsVM.addOnTemplates)
+        }
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 Button {
@@ -152,20 +157,51 @@ struct EstimateView: View {
             }
             
             Section {
+                HStack {
+                    Text("Systems Subtotal")
+                    Spacer()
+                    Text(formatCurrency(estimateVM.currentEstimate.systemsSubtotal))
+                        .fontWeight(.semibold)
+                }
+            }
+            
+            Section {
                 ForEach(estimateVM.currentEstimate.addOns) { addon in
-                    HStack {
-                        Toggle(isOn: bindingForAddOnEnabled(addon.id)) {
-                            VStack(alignment: .leading) {
-                                Text(addon.name)
-                                Text(addon.description)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                    let template = settingsVM.addOnTemplates.first(where: { $0.id == addon.templateId })
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Toggle(isOn: bindingForAddOnEnabled(addon.id)) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(addon.name)
+                                    Text(addon.description)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            Spacer()
+                            if template?.useQuantity == true, addon.quantity > 1 {
+                                Text("\(addon.quantity) × \(formatCurrency(addon.price)) = \(formatCurrency(addon.lineTotal))")
+                                    .font(.subheadline.bold())
+                            } else {
+                                Text(formatCurrency(addon.lineTotal))
+                                    .bold()
                             }
                         }
-                        Spacer()
-                        Text(formatCurrency(addon.price))
-                            .bold()
+                        if template?.useQuantity == true {
+                            HStack(spacing: 8) {
+                                Text("Quantity")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Stepper("", value: bindingForAddOnQuantity(addon.id), in: 1...99)
+                                    .labelsHidden()
+                                Text("\(addon.quantity)")
+                                    .font(.subheadline.bold())
+                                    .frame(minWidth: 24, alignment: .trailing)
+                            }
+                            .padding(.leading, 0)
+                        }
                     }
+                    .padding(.vertical, 4)
                 }
                 .onDelete { indexSet in
                     // Collect IDs safely first, then delete
@@ -190,12 +226,6 @@ struct EstimateView: View {
             
             Section("Totals") {
                 HStack {
-                    Text("Systems Subtotal")
-                    Spacer()
-                    Text(formatCurrency(estimateVM.currentEstimate.systemsSubtotal))
-                }
-                Divider()
-                HStack {
                     Text("Additional Equipment Subtotal")
                     Spacer()
                     Text(formatCurrency(estimateVM.currentEstimate.addOnsSubtotal))
@@ -218,21 +248,39 @@ struct EstimateView: View {
                     }
                     Divider()
                 }
-                HStack {
-                    Text(paymentOption == .creditCard ? "Total" : "Grand Total")
-                        .bold()
-                    Spacer()
-                    Group {
-                        switch paymentOption {
-                        case .cashCheckZelle:
-                            Text(formatCurrency(grandTotal))
-                        case .creditCard:
-                            Text(formatCurrency(grandTotal * (1 + creditCardFeePercent / 100.0)))
-                        case .finance:
-                            Text(formatCurrency(grandTotal * (1 + (financeMarkupPercent / 100.0))))
+                Group {
+                    switch paymentOption {
+                    case .cashCheckZelle:
+                        HStack {
+                            Text("Grand Total").bold()
+                            Spacer()
+                            Text(formatCurrency(grandTotal)).bold()
+                        }
+                    case .creditCard:
+                        HStack {
+                            Text("Total").bold()
+                            Spacer()
+                            Text(formatCurrency(grandTotal * (1 + creditCardFeePercent / 100.0))).bold()
+                        }
+                    case .finance:
+                        let totalWithMarkup = grandTotal * (1 + (financeMarkupPercent / 100.0))
+                        let monthly = estimateFinanceMonthly(total: totalWithMarkup, ratePercent: financeRatePercent, termMonths: financeTermMonths)
+                        let financeGrandTotal = monthly.map { $0 * Double(financeTermMonths) }
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("Grand Total").bold()
+                                Spacer()
+                                Text(formatCurrency(financeGrandTotal ?? totalWithMarkup)).bold()
+                            }
+                            if let mo = monthly, mo > 0 {
+                                HStack {
+                                    Text("Monthly payment").font(.subheadline).foregroundStyle(.secondary)
+                                    Spacer()
+                                    Text("\(formatCurrency(mo))/mo").font(.subheadline.bold())
+                                }
+                            }
                         }
                     }
-                    .bold()
                 }
                 Divider()
                 // Cash Discount – nakit/çek/Zelle farkı
@@ -301,6 +349,28 @@ struct EstimateView: View {
                 estimateVM.setAddOnEnabled(id, enabled: newValue)
             }
         )
+    }
+
+    private func bindingForAddOnQuantity(_ id: UUID) -> Binding<Int> {
+        Binding<Int>(
+            get: {
+                estimateVM.currentEstimate.addOns.first(where: { $0.id == id })?.quantity ?? 1
+            },
+            set: { newValue in
+                estimateVM.setAddOnQuantity(id, quantity: newValue)
+            }
+        )
+    }
+
+    /// Monthly payment for financed amount (same formula as FinanceSettingsView).
+    private func estimateFinanceMonthly(total: Double, ratePercent: Double, termMonths: Int) -> Double? {
+        guard total > 0, termMonths > 0 else { return nil }
+        let n = Double(termMonths)
+        let monthlyRate = ratePercent / 100.0 / 12.0
+        if monthlyRate <= 0 { return total / n }
+        let denominator = 1 - pow(1 + monthlyRate, -n)
+        guard denominator != 0 else { return nil }
+        return total * monthlyRate / denominator
     }
     
     private func generatePDF() {

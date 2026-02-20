@@ -80,7 +80,7 @@ class SummaryPDFRenderer {
                 textOrigin.y += 8
                 drawLine("Additional Equipment:", font: .systemFont(ofSize: 14, weight: .bold))
                 for addOn in enabledAddOns {
-                    drawLine("  • \(addOn.name) – $\(Int(addOn.price))")
+                    drawLine("  • \(addOn.name) – $\(Int(addOn.lineTotal))")
                 }
             }
             

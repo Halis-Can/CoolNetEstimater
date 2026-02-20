@@ -175,6 +175,26 @@ struct FinanceSettingsView: View {
                                     }
                                 }
                                 .padding(.top, 4)
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Grand Total")
+                                            .font(.subheadline.bold())
+                                        Text("Total over \(financeTermMonths) months")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    if let monthly = exampleMonthlyPayment {
+                                        Text(formatCurrency(monthly * Double(financeTermMonths)))
+                                            .font(.subheadline.bold())
+                                            .foregroundStyle(.primary)
+                                    } else {
+                                        Text("—")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                .padding(.top, 6)
                             }
                             .padding(12)
                             .frame(maxWidth: .infinity, alignment: .leading)

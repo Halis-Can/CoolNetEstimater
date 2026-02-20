@@ -79,6 +79,8 @@ final class SettingsViewModel: ObservableObject {
                 addOnTemplates = Self.defaultAddOnTemplates()
             }
         }
+        // Always ensure the 4 fixed Additional Equipment templates are present
+        ensureFixedAddOnTemplatesPresent()
         // Migration: ensure baseline templates exist for all categories/tonnages
         seedMissingTemplatesIfNeeded()
         
@@ -110,7 +112,44 @@ final class SettingsViewModel: ObservableObject {
             print("Persist add-on templates failed: \(error)")
         }
     }
-    
+
+    // MARK: - Add-on template updates (replace array so @Published fires and estimate syncs)
+
+    func setAddOnTemplateDefaultPrice(id: UUID, defaultPrice: Double) {
+        guard let idx = addOnTemplates.firstIndex(where: { $0.id == id }) else { return }
+        var copy = addOnTemplates
+        copy[idx].defaultPrice = defaultPrice
+        addOnTemplates = copy
+    }
+
+    func setAddOnTemplateEnabled(id: UUID, enabled: Bool) {
+        guard let idx = addOnTemplates.firstIndex(where: { $0.id == id }) else { return }
+        var copy = addOnTemplates
+        copy[idx].enabled = enabled
+        addOnTemplates = copy
+    }
+
+    func replaceAddOnTemplate(id: UUID, with template: AddOnTemplate) {
+        guard let idx = addOnTemplates.firstIndex(where: { $0.id == id }) else { return }
+        var copy = addOnTemplates
+        copy[idx] = template
+        addOnTemplates = copy
+    }
+
+    func removeAddOnTemplate(id: UUID) {
+        addOnTemplates = addOnTemplates.filter { $0.id != id }
+    }
+
+    func removeAddOnTemplates(atOffsets offsets: IndexSet) {
+        var copy = addOnTemplates
+        copy.remove(atOffsets: offsets)
+        addOnTemplates = copy
+    }
+
+    func appendAddOnTemplate(_ template: AddOnTemplate) {
+        addOnTemplates = addOnTemplates + [template]
+    }
+
     private static func loadFromBundleSeed() -> TemplatesBundle? {
         guard let url = Bundle.main.url(forResource: "templates_seed", withExtension: "json"),
               let data = try? Data(contentsOf: url) else { return nil }
@@ -338,12 +377,30 @@ final class SettingsViewModel: ObservableObject {
         }
     }
     
+    /// Fixed default Additional Equipment templates – always shown when list is empty.
     private static func defaultAddOnTemplates() -> [AddOnTemplate] {
         [
-            AddOnTemplate(name: "WiFi Thermostat", description: "Smart thermostat install", defaultPrice: 350, enabled: true, freeWhenTierIsBest: true),
-            AddOnTemplate(name: "Surge Protector", description: "Outdoor unit protection", defaultPrice: 225, enabled: true),
-            AddOnTemplate(name: "Duct Sealing", description: "Seal supply/return leaks", defaultPrice: 600, enabled: true)
+            AddOnTemplate(name: "Wifi Thermostat", description: "WiFi thermostat", defaultPrice: 0, enabled: true),
+            AddOnTemplate(name: "Return Plenum with 2\" filter box", description: "Return plenum with 2\" filter box", defaultPrice: 0, enabled: true),
+            AddOnTemplate(name: "Return Plenum with 4\" filter box", description: "Return plenum with 4\" filter box", defaultPrice: 0, enabled: true),
+            AddOnTemplate(name: "Supply Plenum", description: "Supply plenum", defaultPrice: 0, enabled: true),
+            AddOnTemplate(name: "Flex Duct (6\"-8\"-10\"-12\"-14\")", description: "Flex Duct 25 feet", defaultPrice: 0, enabled: true, useQuantity: true)
         ]
+    }
+
+    /// Ensures the fixed Additional Equipment templates are always in the list (adds any missing by name).
+    private func ensureFixedAddOnTemplatesPresent() {
+        var copy = addOnTemplates
+        if let idx = copy.firstIndex(where: { $0.name == "Flex Duct (6')" }) {
+            copy[idx].name = "Flex Duct (6\"-8\"-10\"-12\"-14\")"
+            copy[idx].description = "Flex Duct 25 feet"
+        }
+        let defaults = Self.defaultAddOnTemplates()
+        let existingNames = Set(copy.map { $0.name })
+        for tmpl in defaults where !existingNames.contains(tmpl.name) {
+            copy.append(tmpl)
+        }
+        addOnTemplates = copy
     }
     
     // MARK: - Helpers

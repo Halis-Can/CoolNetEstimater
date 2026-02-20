@@ -83,7 +83,7 @@ struct PrintableSystemPage: View {
                         HStack {
                             Text(addon.name).font(.caption2)
                             Spacer()
-                            Text(formatCurrency(addon.price)).font(.caption2).bold()
+                            Text(formatCurrency(addon.lineTotal)).font(.caption2).bold()
                         }
                     }
                 }
@@ -112,7 +112,7 @@ struct PrintableSystemPage: View {
         estimate.addOns.filter { $0.enabled && $0.systemId == system.id }
     }
     private var addOnsSubtotal: Double {
-        enabledAddOns.map { $0.price }.reduce(0, +)
+        enabledAddOns.map { $0.lineTotal }.reduce(0, +)
     }
     
     private func seriesLabel(_ t: Tier) -> String {
@@ -211,7 +211,7 @@ struct PrintableTotalsComparisonPage: View {
                             HStack {
                                 Text(addon.name).font(.caption2)
                                 Spacer()
-                                Text(formatCurrency(addon.price)).font(.caption2).bold()
+                                Text(formatCurrency(addon.lineTotal)).font(.caption2).bold()
                             }
                         }
                     }
@@ -286,7 +286,7 @@ struct PrintableTotalsComparisonPage: View {
         estimate.addOns.filter { $0.enabled && $0.systemId == system.id }
     }
     private func addOnsSubtotal(for system: EstimateSystem) -> Double {
-        addOnsForSystem(system).map { $0.price }.reduce(0, +)
+        addOnsForSystem(system).map { $0.lineTotal }.reduce(0, +)
     }
 }
 
