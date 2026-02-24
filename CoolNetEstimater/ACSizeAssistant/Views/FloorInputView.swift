@@ -94,15 +94,15 @@ private struct SquareFootageField: View {
             .multilineTextAlignment(.trailing)
             .focused($isFocused)
             .onAppear { text = formatForDisplay(value) }
-            .onChange(of: value) { newValue in
+            .onChange(of: value) { _, newValue in
                 if !isFocused { text = formatForDisplay(newValue) }
             }
-            .onChange(of: text) { newText in
+            .onChange(of: text) { _, newText in
                 let parsed = parseSquareFootage(newText)
                 if let v = parsed, v != value { value = v }
             }
             .onSubmit { commitText() }
-            .onChange(of: isFocused) { focused in
+            .onChange(of: isFocused) { _, focused in
                 if focused {
                     if text == "0" || text.isEmpty { text = "" }
                 } else {

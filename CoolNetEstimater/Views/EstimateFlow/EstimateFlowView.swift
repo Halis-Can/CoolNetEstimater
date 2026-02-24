@@ -34,16 +34,50 @@ struct EstimateFlowView: View {
     @State private var customerSaved: Bool = false
     
     var body: some View {
+        Group {
+            if #available(iOS 16.0, *) {
+                flowWithSplitView
+            } else {
+                flowWithNavigationView
+            }
+        }
+        .background(CoolGradientBackground())
+        .onAppear {
+            if estimateVM.currentEstimate.systems.isEmpty {
+                estimateVM.ensureSystemCount(1, settingsVM: settingsVM)
+            }
+            estimateVM.attachTemplates(settingsVM.addOnTemplates)
+        }
+    }
+    
+    @ViewBuilder
+    private var flowWithSplitView: some View {
         NavigationSplitView {
-            // Sidebar: Customer info lives here consistently
             SidebarCustomerForm(saved: $customerSaved)
         } detail: {
-            // Detail: Wizard steps
-            Group {
-                switch step {
-                case .customer:
-                    CenteredScreen {
-                        AppLogoHeader()
+            flowStepContent
+                .navigationTitle(step == .summary ? "" : step.title)
+                .toolbar { flowToolbar }
+        }
+    }
+    
+    @ViewBuilder
+    private var flowWithNavigationView: some View {
+        NavigationView {
+            flowStepContent
+                .navigationTitle(step == .summary ? "" : step.title)
+                .toolbar { flowToolbar }
+        }
+    }
+    
+    @ViewBuilder
+    private var flowStepContent: some View {
+        Group {
+            switch step {
+            case .customer:
+                CenteredScreen {
+                    AppLogoHeader()
+                    if #available(iOS 16.0, *) {
                         VStack(alignment: .center, spacing: 12) {
                             Text("Please enter customer information on the left, then tap Save.")
                                 .font(.headline)
@@ -54,49 +88,55 @@ struct EstimateFlowView: View {
                                 .buttonStyle(.borderedProminent)
                         }
                         .frame(maxWidth: .infinity, alignment: .center)
-                    }
-                case .systems:
-                    CenteredScreen {
-                        AppLogoHeader()
-                        SystemsSetupScreen(onChange: handleSystemMetaChange, next: goNext, back: goBack)
-                    }
-                case .options:
-                    CenteredScreen {
-                        AppLogoHeader()
-                        SystemOptionsScreen(next: goNext, back: goBack)
-                    }
-                case .addons:
-                    CenteredScreen {
-                        AppLogoHeader()
-                        AdditionalEquipmentScreen(next: goNext, back: goBack)
-                    }
-                case .summary:
-                    CenteredScreen {
-                        FinalSummaryView(back: goBack)
+                    } else {
+                        VStack(alignment: .center, spacing: 12) {
+                            SidebarCustomerForm(saved: $customerSaved)
+                            Text("Save customer above, then tap Next.")
+                                .font(.headline)
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: .infinity)
+                            Button("Next") { goNext() }
+                                .disabled(!customerSaved)
+                                .buttonStyle(.borderedProminent)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .center)
                     }
                 }
-            }
-            .navigationTitle(step == .summary ? "" : step.title)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    if step != .customer {
-                        Button("Back") { goBack() }
-                    }
+            case .systems:
+                CenteredScreen {
+                    AppLogoHeader()
+                    SystemsSetupScreen(onChange: handleSystemMetaChange, next: goNext, back: goBack)
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if step != .summary {
-                        Button("Next") { goNext() }
-                            .disabled(step == .customer && !customerSaved)
-                    }
+            case .options:
+                CenteredScreen {
+                    AppLogoHeader()
+                    SystemOptionsScreen(next: goNext, back: goBack)
+                }
+            case .addons:
+                CenteredScreen {
+                    AppLogoHeader()
+                    AdditionalEquipmentScreen(next: goNext, back: goBack)
+                }
+            case .summary:
+                CenteredScreen {
+                    FinalSummaryView(back: goBack)
                 }
             }
         }
-        .background(CoolGradientBackground())
-        .onAppear {
-            if estimateVM.currentEstimate.systems.isEmpty {
-                estimateVM.ensureSystemCount(1, settingsVM: settingsVM)
+    }
+    
+    @ToolbarContentBuilder
+    private var flowToolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            if step != .customer {
+                Button("Back") { goBack() }
             }
-            estimateVM.attachTemplates(settingsVM.addOnTemplates)
+        }
+        ToolbarItem(placement: .navigationBarTrailing) {
+            if step != .summary {
+                Button("Next") { goNext() }
+                    .disabled(step == .customer && !customerSaved)
+            }
         }
     }
     
@@ -169,7 +209,7 @@ private struct SidebarCustomerForm: View {
                     }
                 }
             }
-            .scrollContentBackground(.hidden)
+            .modifier(ScrollBackgroundHiddenIfAvailable())
         }
         .padding([.horizontal, .top], 12)
         .background(CoolGradientBackground())
@@ -181,6 +221,16 @@ private struct SidebarCustomerForm: View {
     private func binding<T>(_ keyPath: WritableKeyPath<Estimate, T>) -> Binding<T> {
         Binding(get: { estimateVM.currentEstimate[keyPath: keyPath] },
                 set: { estimateVM.currentEstimate[keyPath: keyPath] = $0 })
+    }
+}
+
+private struct ScrollBackgroundHiddenIfAvailable: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16.0, *) {
+            content.scrollContentBackground(.hidden)
+        } else {
+            content
+        }
     }
 }
 
@@ -228,7 +278,7 @@ private struct CustomerInfoScreen: View {
                 .buttonStyle(.borderedProminent)
             }
         }
-        .scrollContentBackground(.hidden)
+        .modifier(ScrollBackgroundHiddenIfAvailable())
     }
     
     private func binding<T>(_ keyPath: WritableKeyPath<Estimate, T>) -> Binding<T> {
@@ -272,7 +322,7 @@ private struct SystemsSetupScreen: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .onChange(of: systemCount) { newValue in
+                .onChange(of: systemCount) { _, newValue in
                     estimateVM.ensureSystemCount(newValue, settingsVM: settingsVM)
                     // Reset editing/saved state on count change
                     editingIds = Set(estimateVM.currentEstimate.systems.map { $0.id })
@@ -425,7 +475,7 @@ private struct SystemsSetupScreen: View {
                 }
             }
         }
-        .scrollContentBackground(.hidden)
+        .modifier(ScrollBackgroundHiddenIfAvailable())
         .onAppear {
             systemCount = max(1, min(3, estimateVM.currentEstimate.systems.count))
             editingIds = Set(estimateVM.currentEstimate.systems.map { $0.id })
@@ -641,7 +691,7 @@ private struct AdditionalEquipmentScreen: View {
                 }
             }
         }
-        .scrollContentBackground(.hidden)
+        .modifier(ScrollBackgroundHiddenIfAvailable())
         .onAppear {
             // Ensure per-system add-ons exist and mirror settings templates
             estimateVM.attachTemplates(settingsVM.addOnTemplates)

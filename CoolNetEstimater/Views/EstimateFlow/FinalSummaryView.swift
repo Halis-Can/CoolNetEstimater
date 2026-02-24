@@ -1403,40 +1403,55 @@ struct DecisionOptionPageView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    selectionPageContentForImage
-                    shareSection
-                }
-                .padding(24)
-                .frame(maxWidth: .infinity)
-                .background(Color(UIColor.secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 20))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color(UIColor.separator), lineWidth: 1)
-                )
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
+        decisionPageNavWrapper
+    }
+    
+    @ViewBuilder
+    private var decisionPageNavWrapper: some View {
+        if #available(iOS 16.0, *) {
+            NavigationStack {
+                decisionPageScrollContent
             }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("Your Selection")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        if let onDismiss {
-                            onDismiss()
-                        } else {
-                            dismiss()
-                        }
+        } else {
+            NavigationView {
+                decisionPageScrollContent
+            }
+        }
+    }
+    
+    private var decisionPageScrollContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                selectionPageContentForImage
+                shareSection
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity)
+            .background(Color(UIColor.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(Color(UIColor.separator), lineWidth: 1)
+            )
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("Your Selection")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Done") {
+                    if let onDismiss {
+                        onDismiss()
+                    } else {
+                        dismiss()
                     }
                 }
             }
-            .fullScreenCover(isPresented: $showThankYouSheet) {
-                ThankYouNextStepsView(onDismiss: { showThankYouSheet = false })
-            }
+        }
+        .fullScreenCover(isPresented: $showThankYouSheet) {
+            ThankYouNextStepsView(onDismiss: { showThankYouSheet = false })
         }
     }
     
@@ -1931,8 +1946,24 @@ struct ThankYouNextStepsView: View {
     var onDismiss: () -> Void
     
     var body: some View {
-        NavigationStack {
-            ScrollView {
+        thankYouNavWrapper
+    }
+    
+    @ViewBuilder
+    private var thankYouNavWrapper: some View {
+        if #available(iOS 16.0, *) {
+            NavigationStack {
+                thankYouScrollContent
+            }
+        } else {
+            NavigationView {
+                thankYouScrollContent
+            }
+        }
+    }
+    
+    private var thankYouScrollContent: some View {
+        ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 56))
@@ -1981,7 +2012,6 @@ struct ThankYouNextStepsView: View {
                 }
             }
             .interactiveDismissDisabled()
-        }
     }
     
     private func nextStepRow(number: Int, title: String, detail: String) -> some View {

@@ -20,8 +20,12 @@ struct EstimateListView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 12) {
+        estimateListNavigationWrapper
+    }
+    
+    @ViewBuilder
+    private var estimateListContent: some View {
+        VStack(spacing: 12) {
                 HStack {
                     TextField("Search by customer name", text: $searchText)
                         .textFieldStyle(.roundedBorder)
@@ -110,16 +114,31 @@ struct EstimateListView: View {
                     }
                 }
                 .listStyle(.insetGrouped)
-                .navigationDestination(isPresented: $navigateToFlow) {
-                    EstimateFlowView(startStep: startAtSummary ? .summary : .customer)
-                }
+        }
+        .padding(.top)
+        .navigationTitle("Estimates")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                EditButton()
             }
-            .padding(.top)
-            .navigationTitle("Estimates")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
+        }
+    }
+    
+    @ViewBuilder
+    private var estimateListNavigationWrapper: some View {
+        if #available(iOS 16.0, *) {
+            NavigationStack {
+                estimateListContent
+                    .navigationDestination(isPresented: $navigateToFlow) {
+                        EstimateFlowView(startStep: startAtSummary ? .summary : .customer)
+                    }
+            }
+        } else {
+            NavigationView {
+                estimateListContent
+            }
+            .fullScreenCover(isPresented: $navigateToFlow) {
+                EstimateFlowView(startStep: startAtSummary ? .summary : .customer)
             }
         }
     }

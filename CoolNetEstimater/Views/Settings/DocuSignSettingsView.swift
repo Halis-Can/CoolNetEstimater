@@ -41,7 +41,7 @@ struct DocuSignSettingsView: View {
         .onAppear {
             integrationKeyInput = docuSignService.integrationKey
         }
-        .onChange(of: integrationKeyInput) { newValue in
+        .onChange(of: integrationKeyInput) { _, newValue in
             docuSignService.integrationKey = newValue
             docuSignService.persistIntegrationKey()
         }

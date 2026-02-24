@@ -88,12 +88,7 @@ struct SystemTemplatesListView: View {
         }
         .sheet(item: $editingItem) { item in
             if let binding = bindingForTemplate(item.id) {
-                NavigationView {
-                    SystemTemplateEditView(systemTemplate: binding)
-                        .environmentObject(settingsVM)
-                }
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                sheetContent(binding: binding)
             } else {
                 VStack {
                     Text("Template not found")
@@ -104,6 +99,18 @@ struct SystemTemplatesListView: View {
                 }
                 .padding()
             }
+        }
+    }
+    
+    private func sheetContent(binding: Binding<EstimateSystem>) -> some View {
+        let nav = NavigationView {
+            SystemTemplateEditView(systemTemplate: binding)
+                .environmentObject(settingsVM)
+        }
+        if #available(iOS 16.0, *) {
+            return AnyView(nav.presentationDetents([.large]).presentationDragIndicator(.visible))
+        } else {
+            return AnyView(nav)
         }
     }
     
@@ -154,5 +161,3 @@ struct SystemTemplatesListView: View {
         return EstimateSystem(name: "3 Ton AC + Furnace", tonnage: ton, equipmentType: .acFurnace, options: opts)
     }
 }
-
-

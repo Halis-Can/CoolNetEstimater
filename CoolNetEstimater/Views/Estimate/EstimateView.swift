@@ -769,7 +769,7 @@ private struct SystemDetailView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
                     ForEach(system.options.filter { visibleTiers.contains($0.tier) }) { option in
-                        SystemOptionCard(option: option, system: system, isSelected: option.isSelectedByCustomer) {
+                        SystemOptionCard(option: option, system: system, isSelected: option.isSelectedByCustomer, estimateDisplayTotal: systemDetailDisplayTotal) {
                             estimateVM.selectOption(systemId: system.id, optionId: option.id)
                         }
                         .frame(width: 320)
@@ -940,6 +940,7 @@ private struct SystemOptionCard: View {
     let option: SystemOption
     let system: EstimateSystem
     let isSelected: Bool
+    let estimateDisplayTotal: Double
     let onSelect: () -> Void
     
     var body: some View {
@@ -981,9 +982,33 @@ private struct SystemOptionCard: View {
                     .padding(.vertical, 4)
                 }
                 
+                HStack(alignment: .center) {
+                    Text("Grand Total:")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Spacer()
+                    Text(formatCurrency(estimateDisplayTotal))
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity)
+                .background(Color(UIColor.secondarySystemGroupedBackground))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.green.opacity(0.7), lineWidth: 2))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                
                 HStack {
+                    Text("Cash price Total:")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Spacer()
                     Text(formatCurrency(option.price))
-                        .font(.title3).bold()
+                        .font(.title3)
+                        .bold()
+                }
+                .padding(.vertical, 4)
+                
+                HStack {
                     Spacer()
                     Text(isSelected ? "Selected" : "Select")
                         .font(.subheadline)

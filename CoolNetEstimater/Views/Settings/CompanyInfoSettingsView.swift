@@ -30,9 +30,11 @@ struct CompanyInfoSettingsView: View {
     @State private var draftWebsite: String = ""
     
     // Logo management
-    @State private var selectedLogoItem: PhotosPickerItem? = nil
     @State private var logoImage: Image? = nil
     @State private var showingImagePicker = false
+    #if os(iOS)
+    @State private var showLegacyLogoPicker = false
+    #endif
     @AppStorage("company_logo_data") private var companyLogoData: Data?
     @State private var showSaveConfirmation = false
     
@@ -69,11 +71,7 @@ struct CompanyInfoSettingsView: View {
                     
                     HStack(spacing: 12) {
 #if os(iOS)
-                        PhotosPicker(selection: $selectedLogoItem, matching: .images) {
-                            Label("Select Logo", systemImage: "photo.on.rectangle")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
+                        logoPickerButton
 #elseif os(macOS)
                         Button {
                             showImagePicker()
@@ -142,7 +140,7 @@ struct CompanyInfoSettingsView: View {
                     }
                 }
                 .frame(maxWidth: 700)
-                .scrollContentBackground(.hidden)
+                .modifier(ScrollContentBackgroundHiddenModifier())
             }
             .frame(maxWidth: .infinity, alignment: .center)
             .padding()
@@ -158,13 +156,17 @@ struct CompanyInfoSettingsView: View {
                 draftWebsite = companyWebsite
                 loadLogo()
             }
-            .onChange(of: selectedLogoItem) { newValue in
-                Task {
-                    if let newValue = newValue {
-                        await loadLogoFromPicker(item: newValue)
+            #if os(iOS)
+            .sheet(isPresented: $showLegacyLogoPicker) {
+                CompanyLogoLegacyPhotoPickerView(selectedData: { data in
+                    if let data = data, let ui = UIImage(data: data), let compressed = ui.jpegData(compressionQuality: 0.8) {
+                        companyLogoData = compressed
+                        logoImage = Image(uiImage: ui)
                     }
-                }
+                    showLegacyLogoPicker = false
+                })
             }
+            #endif
             .overlay(alignment: .top) {
                 if showSaveConfirmation {
                     VStack {
@@ -286,7 +288,7 @@ struct CompanyInfoSettingsView: View {
                     }
                 }
                 .frame(maxWidth: 700)
-                .scrollContentBackground(.hidden)
+                .modifier(ScrollContentBackgroundHiddenModifier())
             }
             .frame(maxWidth: .infinity, alignment: .center)
             .padding()
@@ -329,6 +331,28 @@ struct CompanyInfoSettingsView: View {
     
     // MARK: - Logo Management
     
+    #if os(iOS)
+    @ViewBuilder
+    private var logoPickerButton: some View {
+        if #available(iOS 16.0, *) {
+            CompanyLogoPickerButton16(onSelected: { data in
+                if let data = data, let ui = UIImage(data: data), let compressed = ui.jpegData(compressionQuality: 0.8) {
+                    companyLogoData = compressed
+                    logoImage = Image(uiImage: ui)
+                }
+            })
+        } else {
+            Button {
+                showLegacyLogoPicker = true
+            } label: {
+                Label("Select Logo", systemImage: "photo.on.rectangle")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+    #endif
+    
     private func loadLogo() {
         guard let logoData = companyLogoData else {
             logoImage = nil
@@ -346,18 +370,7 @@ struct CompanyInfoSettingsView: View {
         #endif
     }
     
-    #if os(iOS)
-    private func loadLogoFromPicker(item: PhotosPickerItem) async {
-        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
-        guard let uiImage = UIImage(data: data) else { return }
-        
-        // Compress and save
-        if let compressedData = uiImage.jpegData(compressionQuality: 0.8) {
-            companyLogoData = compressedData
-            logoImage = Image(uiImage: uiImage)
-        }
-    }
-    #elseif os(macOS)
+    #if os(macOS)
     private func showImagePicker() {
         let openPanel = NSOpenPanel()
         openPanel.allowedContentTypes = [.image]
@@ -381,7 +394,82 @@ struct CompanyInfoSettingsView: View {
     private func removeLogo() {
         companyLogoData = nil
         logoImage = nil
-        selectedLogoItem = nil
     }
 }
 
+// MARK: - iOS 16+ logo picker (PhotosPickerItem)
+@available(iOS 16.0, *)
+private struct CompanyLogoPickerButton16: View {
+    let onSelected: (Data?) -> Void
+    @State private var selectedItem: PhotosPickerItem?
+
+    var body: some View {
+        PhotosPicker(selection: $selectedItem, matching: .images) {
+            Label("Select Logo", systemImage: "photo.on.rectangle")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .onChange(of: selectedItem) { _, newValue in
+            guard let item = newValue else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    onSelected(data)
+                }
+                selectedItem = nil
+            }
+        }
+    }
+}
+
+// MARK: - iOS 15 logo picker (PHPickerViewController)
+#if os(iOS)
+private struct CompanyLogoLegacyPhotoPickerView: UIViewControllerRepresentable {
+    let selectedData: (Data?) -> Void
+
+    func makeUIViewController(context: Context) -> PHPickerViewController {
+        var config = PHPickerConfiguration()
+        config.filter = .images
+        config.selectionLimit = 1
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(selectedData: selectedData)
+    }
+
+    class Coordinator: NSObject, PHPickerViewControllerDelegate {
+        let selectedData: (Data?) -> Void
+        init(selectedData: @escaping (Data?) -> Void) { self.selectedData = selectedData }
+
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            picker.dismiss(animated: true)
+            guard let result = results.first else {
+                selectedData(nil)
+                return
+            }
+            result.itemProvider.loadDataRepresentation(forTypeIdentifier: "public.image") { data, _ in
+                DispatchQueue.main.async { self.selectedData(data) }
+            }
+        }
+    }
+}
+#endif
+
+// MARK: - Conditional scrollContentBackground (iOS 16+)
+private struct ScrollContentBackgroundHiddenModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        if #available(iOS 16.0, *) {
+            content.scrollContentBackground(.hidden)
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
+    }
+}

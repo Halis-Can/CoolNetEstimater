@@ -38,7 +38,7 @@ struct TierOptionsPhotosSettingsView: View {
                 
                 CategoryEditorView(store: store, category: selectedCategory)
             }
-            .scrollContentBackground(.hidden)
+            .modifier(ScrollContentBackgroundHiddenModifier())
         }
         .frame(maxWidth: 700)
         .padding()
@@ -127,7 +127,7 @@ private struct CategoryEditorView: View {
         .onAppear {
             loadFromStore()
         }
-        .onChange(of: category) { _ in
+        .onChange(of: category) {
             loadFromStore()
             isEditing = false
             hasUnsavedChanges = false
@@ -197,7 +197,9 @@ private struct TierSlotEditorView: View {
     @Binding var link: String
     var isEditing: Bool = true
     
-    @State private var selectedItem: PhotosPickerItem?
+    #if os(iOS)
+    @State private var showLegacyPhotoPicker: Bool = false
+    #endif
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -215,16 +217,7 @@ private struct TierSlotEditorView: View {
                 photoPreview
                 VStack(alignment: .leading, spacing: 8) {
                     #if os(iOS)
-                    PhotosPicker(selection: $selectedItem, matching: .images) {
-                        Label("Change Photo", systemImage: "photo.on.rectangle")
-                    }
-                    .buttonStyle(.bordered)
-                    .onChange(of: selectedItem) { newVal in
-                        if let item = newVal {
-                            Task { await loadFromPicker(item: item) }
-                            selectedItem = nil
-                        }
-                    }
+                    changePhotoButton
                     #elseif os(macOS)
                     Button {
                         loadFromFilePicker()
@@ -248,10 +241,7 @@ private struct TierSlotEditorView: View {
                 Text("Information (shown to customer below photo)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                TextField("Product details, features...", text: $info, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .lineLimit(3...6)
-                    .disabled(!isEditing)
+                infoTextField
             }
             
             VStack(alignment: .leading, spacing: 6) {
@@ -267,6 +257,40 @@ private struct TierSlotEditorView: View {
         }
         .padding(.vertical, 8)
     }
+    
+    #if os(iOS)
+    @ViewBuilder
+    private var infoTextField: some View {
+        if #available(iOS 16.0, *) {
+            TextField("Product details, features...", text: $info, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+                .lineLimit(6)
+                .disabled(!isEditing)
+        } else {
+            ZStack(alignment: .topLeading) {
+                if info.isEmpty {
+                    Text("Product details, features...")
+                        .foregroundStyle(Color(UIColor.placeholderText))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 8)
+                }
+                TextEditor(text: $info)
+                    .frame(minHeight: 60, maxHeight: 120)
+                    .padding(4)
+                    .background(Color(UIColor.systemBackground))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(UIColor.separator), lineWidth: 0.5))
+                    .disabled(!isEditing)
+            }
+        }
+    }
+    #elseif os(macOS)
+    private var infoTextField: some View {
+        TextField("Product details, features...", text: $info, axis: .vertical)
+            .textFieldStyle(.roundedBorder)
+            .lineLimit(6)
+            .disabled(!isEditing)
+    }
+    #endif
     
     private var photoPreview: some View {
         ZStack {
@@ -293,6 +317,30 @@ private struct TierSlotEditorView: View {
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.secondary.opacity(0.3), lineWidth: 1))
     }
     
+    #if os(iOS)
+    @ViewBuilder
+    private var changePhotoButton: some View {
+        if #available(iOS 16.0, *) {
+            PhotosPickerButton16(store: store, category: category, tier: tier)
+        } else {
+            Button {
+                showLegacyPhotoPicker = true
+            } label: {
+                Label("Change Photo", systemImage: "photo.on.rectangle")
+            }
+            .buttonStyle(.bordered)
+            .sheet(isPresented: $showLegacyPhotoPicker) {
+                LegacyPhotoPickerView(selectedData: { data in
+                    if let data = data, let ui = UIImage(data: data), let compressed = ui.jpegData(compressionQuality: 0.8) {
+                        store.setPhotoData(compressed, category: category, tier: tier)
+                    }
+                    showLegacyPhotoPicker = false
+                })
+            }
+        }
+    }
+    #endif
+    
     private func tierImage(from data: Data) -> Image {
         #if os(iOS)
         if let ui = UIImage(data: data) { return Image(uiImage: ui) }
@@ -302,14 +350,7 @@ private struct TierSlotEditorView: View {
         return Image(systemName: "photo")
     }
     
-    #if os(iOS)
-    private func loadFromPicker(item: PhotosPickerItem) async {
-        guard let raw = try? await item.loadTransferable(type: Data.self),
-              let ui = UIImage(data: raw),
-              let compressed = ui.jpegData(compressionQuality: 0.8) else { return }
-        store.setPhotoData(compressed, category: category, tier: tier)
-    }
-    #elseif os(macOS)
+    #if os(macOS)
     private func loadFromFilePicker() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image]
@@ -329,4 +370,91 @@ private struct TierSlotEditorView: View {
         }
     }
     #endif
+}
+
+// MARK: - iOS 16+ PhotosPicker wrapper (uses PhotosPickerItem)
+@available(iOS 16.0, *)
+private struct PhotosPickerButton16: View {
+    @ObservedObject var store: TierPhotoSettingsStore
+    let category: TierPhotoCategory
+    let tier: Tier
+    @State private var selectedItem: PhotosPickerItem?
+
+    var body: some View {
+        PhotosPicker(selection: $selectedItem, matching: .images) {
+            Label("Change Photo", systemImage: "photo.on.rectangle")
+        }
+        .buttonStyle(.bordered)
+        .onChange(of: selectedItem) { _, newVal in
+            if let item = newVal {
+                Task { await loadFromPicker(item: item) }
+                selectedItem = nil
+            }
+        }
+    }
+
+    private func loadFromPicker(item: PhotosPickerItem) async {
+        guard let raw = try? await item.loadTransferable(type: Data.self),
+              let ui = UIImage(data: raw),
+              let compressed = ui.jpegData(compressionQuality: 0.8) else { return }
+        store.setPhotoData(compressed, category: category, tier: tier)
+    }
+}
+
+// MARK: - iOS 15 photo picker (PHPickerViewController)
+#if os(iOS)
+private struct LegacyPhotoPickerView: UIViewControllerRepresentable {
+    let selectedData: (Data?) -> Void
+
+    func makeUIViewController(context: Context) -> PHPickerViewController {
+        var config = PHPickerConfiguration()
+        config.filter = .images
+        config.selectionLimit = 1
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(selectedData: selectedData)
+    }
+
+    class Coordinator: NSObject, PHPickerViewControllerDelegate {
+        let selectedData: (Data?) -> Void
+
+        init(selectedData: @escaping (Data?) -> Void) {
+            self.selectedData = selectedData
+        }
+
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            picker.dismiss(animated: true)
+            guard let result = results.first else {
+                selectedData(nil)
+                return
+            }
+            result.itemProvider.loadDataRepresentation(forTypeIdentifier: "public.image") { data, _ in
+                DispatchQueue.main.async {
+                    self.selectedData(data)
+                }
+            }
+        }
+    }
+}
+#endif
+
+// MARK: - Conditional scrollContentBackground (iOS 16+)
+private struct ScrollContentBackgroundHiddenModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        if #available(iOS 16.0, *) {
+            content.scrollContentBackground(.hidden)
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
+    }
 }

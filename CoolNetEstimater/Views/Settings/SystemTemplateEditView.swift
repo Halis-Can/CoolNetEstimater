@@ -120,7 +120,7 @@ struct SystemTemplateEditView: View {
                 }
             }
             .frame(maxWidth: 900)
-            .scrollContentBackground(.hidden)
+            .modifier(ScrollContentBackgroundHiddenModifier())
         }
         .frame(maxWidth: .infinity, alignment: .center)
         .padding()
@@ -285,4 +285,18 @@ private func currentCapacityLabel(_ sys: EstimateSystem) -> String {
     }
 }
 
+// MARK: - Conditional scrollContentBackground (iOS 16+)
+private struct ScrollContentBackgroundHiddenModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        if #available(iOS 16.0, *) {
+            content.scrollContentBackground(.hidden)
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
+    }
+}
 
