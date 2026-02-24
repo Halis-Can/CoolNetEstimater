@@ -7,6 +7,22 @@
 
 import Foundation
 
+// MARK: - Finance term options and APRs (Wells Fargo / Carrier Finance)
+enum FinanceTermRates {
+    /// Available finance terms in months: 24, 36, 48, 60.
+    static let availableTerms: [Int] = [24, 36, 48, 60]
+    /// APR (annual percentage rate) for each term. Falls back to 60‑month rate if term not in list.
+    static func aprPercent(for termMonths: Int) -> Double {
+        switch termMonths {
+        case 24: return 10.77
+        case 36: return 13.78
+        case 48: return 15.80
+        case 60: return 16.98
+        default: return 16.98
+        }
+    }
+}
+
 enum PaymentOption: String, CaseIterable {
     case cashCheckZelle = "cash_check_zelle"
     case creditCard = "credit_card"

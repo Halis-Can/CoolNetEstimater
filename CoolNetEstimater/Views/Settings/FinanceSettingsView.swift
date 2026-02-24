@@ -7,7 +7,7 @@ import SwiftUI
 
 struct FinanceSettingsView: View {
     @AppStorage("finance_rate_percent") private var financeRatePercent: Double = 0.0
-    @AppStorage("finance_term_months") private var financeTermMonths: Int = 12
+    @AppStorage("finance_term_months") private var financeTermMonths: Int = 60
     @AppStorage("finance_markup_percent") private var financeMarkupPercent: Double = 0.0
     @AppStorage("payment_option") private var paymentOptionRaw: String = PaymentOption.cashCheckZelle.rawValue
     @State private var exampleAmount: Double = 10000
@@ -17,11 +17,11 @@ struct FinanceSettingsView: View {
         set { paymentOptionRaw = newValue.rawValue }
     }
 
-    private let availableTerms: [Int] = [12, 36, 60]
+    private let availableTerms: [Int] = FinanceTermRates.availableTerms
     private let examplePresets: [Double] = [5000, 10000, 15000, 20000]
 
     private var exampleMonthlyPayment: Double? {
-        exampleMonthlyPayment(total: exampleAmount, ratePercent: financeRatePercent, termMonths: financeTermMonths)
+        exampleMonthlyPayment(total: exampleAmount, ratePercent: FinanceTermRates.aprPercent(for: financeTermMonths), termMonths: financeTermMonths)
     }
 
     var body: some View {
@@ -53,23 +53,6 @@ struct FinanceSettingsView: View {
                                 .padding(.vertical, 4)
                             Group {
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("Finance Rate")
-                                        .font(.subheadline.bold())
-                                    HStack {
-                                        Text("Rate (%)")
-                                        Spacer()
-                                        TextField("0", value: $financeRatePercent, formatter: decimalFormatter)
-                                            .keyboardType(.decimalPad)
-                                            .multilineTextAlignment(.trailing)
-                                            .frame(maxWidth: 120)
-                                    }
-                                    Text("Enter the standard financing interest rate as a percentage.")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                .padding(.vertical, 4)
-
-                                VStack(alignment: .leading, spacing: 8) {
                                     Text("Finance Term")
                                         .font(.subheadline.bold())
                                     Picker("Term", selection: $financeTermMonths) {
@@ -78,6 +61,14 @@ struct FinanceSettingsView: View {
                                         }
                                     }
                                     .pickerStyle(.segmented)
+                                }
+                                .padding(.vertical, 4)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("APR for selected term")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Text(String(format: "%.2f%%", FinanceTermRates.aprPercent(for: financeTermMonths)))
+                                        .font(.subheadline.bold())
                                 }
                                 .padding(.vertical, 4)
 
@@ -157,7 +148,7 @@ struct FinanceSettingsView: View {
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                     Spacer()
-                                    Text(String(format: "%.2f%%", financeRatePercent))
+                                    Text(String(format: "%.2f%%", FinanceTermRates.aprPercent(for: financeTermMonths)))
                                         .font(.caption.bold())
                                 }
                                 HStack {

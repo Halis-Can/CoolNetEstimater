@@ -14,6 +14,9 @@ import Combine
 import AppKit
 #endif
 
+/// Fixed website link for Good/Better/Best descriptions (AC) — Carrier residential air conditioners.
+let tierGoodBetterBestACLinkURL = "https://www.carrier.com/us/en/residential/air-conditioners/"
+
 /// Manages tier photo, info, and link settings per equipment category (AC, Furnace, Heat Pump) × tier (Good, Better, Best).
 /// Persists to UserDefaults. Migrates from legacy shared keys on first load.
 final class TierPhotoSettingsStore: ObservableObject {
@@ -50,6 +53,9 @@ final class TierPhotoSettingsStore: ObservableObject {
     }
     
     func link(category: TierPhotoCategory, tier: Tier) -> String {
+        if category == .ac {
+            return tierGoodBetterBestACLinkURL
+        }
         let key = TierPhotoStorageKeys.linkKey(category: category, tier: tier)
         return defaults.string(forKey: key) ?? ""
     }

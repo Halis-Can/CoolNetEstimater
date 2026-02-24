@@ -35,6 +35,8 @@ class SignatureDrawingView: UIView {
         backgroundColor = .white
         isMultipleTouchEnabled = false
         isOpaque = true
+        isUserInteractionEnabled = true
+        isExclusiveTouch = true
     }
     
     required init?(coder: NSCoder) {
@@ -42,6 +44,8 @@ class SignatureDrawingView: UIView {
         backgroundColor = .white
         isMultipleTouchEnabled = false
         isOpaque = true
+        isUserInteractionEnabled = true
+        isExclusiveTouch = true
     }
     
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {

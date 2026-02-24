@@ -36,17 +36,19 @@ struct SignaturePadView: View {
                     }
                 }
                 .background(Color.white)
-                .gesture(DragGesture(minimumDistance: 0.1)
-                    .onChanged { value in
-                        currentPath.append(value.location)
-                    }
-                    .onEnded { _ in
-                        if !currentPath.isEmpty {
-                            paths.append(currentPath)
-                            currentPath = []
-                            imageData = snapshotImage(in: proxy)
+                .contentShape(Rectangle())
+                .highPriorityGesture(
+                    DragGesture(minimumDistance: 0.5)
+                        .onChanged { value in
+                            currentPath.append(value.location)
                         }
-                    }
+                        .onEnded { _ in
+                            if !currentPath.isEmpty {
+                                paths.append(currentPath)
+                                currentPath = []
+                                imageData = snapshotImage(in: proxy)
+                            }
+                        }
                 )
                 
                 HStack {

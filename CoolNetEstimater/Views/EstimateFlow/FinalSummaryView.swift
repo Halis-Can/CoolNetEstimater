@@ -20,7 +20,7 @@ struct FinalSummaryView: View {
     @AppStorage("tier_best_visible") private var tierBestVisible: Bool = true
     @AppStorage("finance_markup_percent") private var financeMarkupPercent: Double = 0.0
     @AppStorage("finance_rate_percent") private var financeRatePercent: Double = 0.0
-    @AppStorage("finance_term_months") private var financeTermMonths: Int = 12
+    @AppStorage("finance_term_months") private var financeTermMonths: Int = 60
     @AppStorage("company_name") private var companyName: String = "CoolSeason HVAC"
     @AppStorage("company_phone") private var companyPhone: String = ""
     @AppStorage("company_email") private var companyEmail: String = ""
@@ -270,7 +270,7 @@ struct FinalSummaryView: View {
         @EnvironmentObject var estimateVM: EstimateViewModel
         @AppStorage("payment_option") private var paymentOptionRaw: String = PaymentOption.cashCheckZelle.rawValue
         @AppStorage("finance_rate_percent") private var financeRatePercent: Double = 0.0
-        @AppStorage("finance_term_months") private var financeTermMonths: Int = 12
+        @AppStorage("finance_term_months") private var financeTermMonths: Int = 60
         @AppStorage("finance_markup_percent") private var financeMarkupPercent: Double = 0.0
         
         var body: some View {
@@ -335,12 +335,6 @@ struct FinalSummaryView: View {
                 }
                 
                 Divider().padding(.vertical, 4)
-                // Per-card subtotals and total investment (small font above Total)
-                HStack {
-                    Text("Systems Subtotal").font(.system(size: 10))
-                    Spacer()
-                    Text(formatCurrency(optionSum)).font(.system(size: 10))
-                }
                 HStack {
                     Text("Additional Equipment Subtotal").font(.system(size: 10))
                     Spacer()
@@ -445,7 +439,7 @@ struct FinalSummaryView: View {
         
         private var monthlyPaymentText: String {
             guard let value = financeMonthlyPayment(total: totalWithMarkup,
-                                                    ratePercent: financeRatePercent,
+                                                    ratePercent: FinanceTermRates.aprPercent(for: financeTermMonths),
                                                     termMonths: financeTermMonths) else {
                 return "—"
             }
@@ -592,7 +586,7 @@ struct FinalSummaryView: View {
         @EnvironmentObject var estimateVM: EstimateViewModel
         @AppStorage("payment_option") private var paymentOptionRaw: String = PaymentOption.cashCheckZelle.rawValue
         @AppStorage("finance_rate_percent") private var financeRatePercent: Double = 0.0
-        @AppStorage("finance_term_months") private var financeTermMonths: Int = 12
+        @AppStorage("finance_term_months") private var financeTermMonths: Int = 60
         @AppStorage("finance_markup_percent") private var financeMarkupPercent: Double = 0.0
         
         var body: some View {
@@ -730,7 +724,7 @@ struct FinalSummaryView: View {
         
         private var monthlyPaymentText: String {
             guard let value = financeMonthlyPayment(total: totalWithMarkup,
-                                                    ratePercent: financeRatePercent,
+                                                    ratePercent: FinanceTermRates.aprPercent(for: financeTermMonths),
                                                     termMonths: financeTermMonths) else {
                 return "—"
             }
@@ -850,11 +844,6 @@ struct FinalSummaryView: View {
         let paymentOption = PaymentOption(rawValue: paymentOptionRaw) ?? .cashCheckZelle
         return VStack(alignment: .leading, spacing: 8) {
             Text("Totals").font(.title2).bold()
-            HStack {
-                Text("Systems Subtotal")
-                Spacer()
-                Text(formatCurrency(estimateVM.currentEstimate.systemsSubtotal))
-            }
             HStack {
                 Text("Additional Equipment Subtotal")
                 Spacer()
@@ -1006,7 +995,7 @@ struct FinalSummaryView: View {
     
     private func monthlyPaymentText(for total: Double) -> String {
         guard let value = financeMonthlyPayment(total: total,
-                                                ratePercent: financeRatePercent,
+                                                ratePercent: FinanceTermRates.aprPercent(for: financeTermMonths),
                                                 termMonths: financeTermMonths) else {
             return "—"
         }
@@ -1054,7 +1043,7 @@ struct DecisionOptionPageView: View {
     @AppStorage("payment_option") private var paymentOptionRaw: String = PaymentOption.cashCheckZelle.rawValue
     @AppStorage("finance_markup_percent") private var financeMarkupPercent: Double = 0.0
     @AppStorage("finance_rate_percent") private var financeRatePercent: Double = 0.0
-    @AppStorage("finance_term_months") private var financeTermMonths: Int = 12
+    @AppStorage("finance_term_months") private var financeTermMonths: Int = 60
     @AppStorage("company_name") private var companyName: String = "CoolSeason HVAC"
     @AppStorage("company_phone") private var companyPhone: String = ""
     @AppStorage("company_email") private var companyEmail: String = ""
@@ -1110,7 +1099,7 @@ struct DecisionOptionPageView: View {
         case .cashCheckZelle: return totalIncludingAddOns
         case .creditCard: return totalIncludingAddOns * (1 + creditCardFeePercent / 100.0)
         case .finance:
-            guard let monthly = financeMonthlyPayment(total: totalWithMarkup, ratePercent: financeRatePercent, termMonths: financeTermMonths) else {
+            guard let monthly = financeMonthlyPayment(total: totalWithMarkup, ratePercent: FinanceTermRates.aprPercent(for: financeTermMonths), termMonths: financeTermMonths) else {
                 return totalWithMarkup
             }
             return monthly * Double(financeTermMonths)
@@ -1119,7 +1108,7 @@ struct DecisionOptionPageView: View {
     
     private var selectionMonthlyPaymentText: String {
         guard let value = financeMonthlyPayment(total: totalWithMarkup,
-                                                ratePercent: financeRatePercent,
+                                                ratePercent: FinanceTermRates.aprPercent(for: financeTermMonths),
                                                 termMonths: financeTermMonths) else {
             return "—"
         }
@@ -1131,7 +1120,7 @@ struct DecisionOptionPageView: View {
         totalWithMarkup - totalIncludingAddOns
     }
 
-    /// Payment options block: shows Total with Finance (e.g. 60 months), Cash Discount – Credit, and prominent Cash/Zelle option.
+    /// Payment options block: shows Grand Total, Finance Options (when Finance), and Cash Discount box.
     private var selectionPaymentOptionsSection: some View {
         let paymentOption = PaymentOption(rawValue: paymentOptionRaw) ?? .cashCheckZelle
         return VStack(alignment: .leading, spacing: 10) {
@@ -1160,30 +1149,6 @@ struct DecisionOptionPageView: View {
                 )
             }
 
-            if paymentOption == .finance, financeMarkupAmount > 0 {
-                HStack {
-                    Text("Cash Discount – Credit")
-                        .font(.subheadline)
-                    Spacer()
-                    Text("- \(formatCurrency(financeMarkupAmount))")
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 6)
-                .padding(.horizontal, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.green.opacity(0.6), lineWidth: 1)
-                )
-                HStack {
-                    Text("Sub-Total (Cash/Check/Zelle)")
-                        .bold()
-                    Spacer()
-                    Text(formatCurrency(totalIncludingAddOns))
-                        .font(.subheadline.bold())
-                }
-            }
-
             HStack(alignment: .center) {
                 Text(paymentOption == .creditCard ? "Total" : "Grand Total")
                     .font(.title2)
@@ -1205,32 +1170,70 @@ struct DecisionOptionPageView: View {
             }
 
             if paymentOption == .finance {
-                HStack(alignment: .center) {
-                    Text("Financing Plan / \(financeTermMonths) Months")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color.purple)
-                    Spacer()
-                    Text("\(selectionMonthlyPaymentText)/mo")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.primary)
-                }
-                .padding(.vertical, 14)
-                .padding(.horizontal, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.purple.opacity(0.12))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.purple.opacity(0.5), lineWidth: 2)
-                )
-                .padding(.top, 4)
+                selectionFinanceOptionsCard
             }
 
             cashPaymentOptionBox
         }
+    }
+
+    /// Finance Options card: purchase price, monthly / term / total, APR selector (same design as Estimate page).
+    private var selectionFinanceOptionsCard: some View {
+        let availableTerms = FinanceTermRates.availableTerms
+        return VStack(alignment: .leading, spacing: 0) {
+            Text("Finance Options")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 12)
+            VStack(spacing: 16) {
+                HStack(alignment: .center, spacing: 0) {
+                    Spacer(minLength: 0)
+                    Text("\(financeTermMonths) months / \(selectionMonthlyPaymentText)")
+                        .font(.system(size: 30, weight: .bold))
+                        .foregroundStyle(.primary)
+                }
+                .padding(.vertical, 12)
+                Menu {
+                    ForEach(availableTerms, id: \.self) { term in
+                        Button("\(term) months with equal payments") {
+                            financeTermMonths = term
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Spacer(minLength: 0)
+                        Text("\(financeTermMonths) months with equal payments")
+                            .font(.title3)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.primary)
+                            .multilineTextAlignment(.center)
+                        Image(systemName: "chevron.down")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 14)
+                    .background(Color(UIColor.tertiarySystemFill))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+                Text("Wells Fargo / Carrier Finance")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+            }
+            .padding(20)
+            .background(Color(UIColor.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color(UIColor.separator), lineWidth: 1)
+            )
+        }
+        .padding(.top, 4)
     }
 
     /// Cash Discount box: "Cash Discount" title with discount amount large and dark, right-aligned.
@@ -1269,7 +1272,7 @@ struct DecisionOptionPageView: View {
             }
             Spacer(minLength: 12)
             if discountAmount > 0 {
-                Text(formatCurrency(discountAmount))
+                Text("- " + formatCurrency(discountAmount))
                     .font(.title2)
                     .fontWeight(.bold)
                     .foregroundStyle(.primary)
@@ -1385,11 +1388,6 @@ struct DecisionOptionPageView: View {
                     }
                 }
                 Divider().padding(.vertical, 8)
-                HStack {
-                    Text("Systems Subtotal")
-                    Spacer()
-                    Text(formatCurrency(optionSum))
-                }
                 HStack {
                     Text("Additional Equipment Subtotal")
                     Spacer()
@@ -1713,11 +1711,16 @@ struct DecisionOptionPageView: View {
     }
     
     private var signatureSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Signature")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Image(systemName: "signature")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+                Text("Signature")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+            }
             if isSigned {
-                // Signed: show image only, no re-sign. Show name and date.
                 VStack(alignment: .leading, spacing: 12) {
                     if let data = estimateVM.currentEstimate.customerSignatureImageData {
                         signatureImageFromData(data)
@@ -1744,49 +1747,51 @@ struct DecisionOptionPageView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
             } else {
-                // Not signed: show pad and DocuSign. Label who is signing.
                 Text("Signing as: \(estimateVM.currentEstimate.customerName.isEmpty ? "Customer" : estimateVM.currentEstimate.customerName)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                SignatureView(signatureData: Binding(
+                Text("Draw your signature in the box below, or use DocuSign to sign electronically.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                SignaturePadView(imageData: Binding(
                     get: { estimateVM.currentEstimate.customerSignatureImageData },
                     set: { newData in
-                        estimateVM.currentEstimate.customerSignatureImageData = newData
                         if newData != nil {
                             estimateVM.currentEstimate.customerSignatureDate = Date()
                         }
-                        estimateVM.recalculateTotals()
+                        estimateVM.updateSignature(data: newData)
                     }
                 ))
                 .frame(maxWidth: .infinity)
-                .frame(height: 140)
+                .frame(height: 160)
                 .background(Color(UIColor.secondarySystemBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color(UIColor.separator), lineWidth: 1)
+                        .stroke(Color.accentColor.opacity(0.5), lineWidth: 2)
                 )
-                Button {
-                    let pdf = EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
-                    docuSignService.startSigning(
-                        estimate: estimateVM.currentEstimate,
-                        pdfData: pdf,
-                        onSigned: { signedData in
-                            if let data = signedData {
-                                estimateVM.currentEstimate.customerSignatureImageData = data
-                                estimateVM.currentEstimate.customerSignatureDate = Date()
-                                estimateVM.recalculateTotals()
+                HStack(spacing: 12) {
+                    Button {
+                        let pdf = EstimatePDFRenderer.render(estimate: estimateVM.currentEstimate)
+                        docuSignService.startSigning(
+                            estimate: estimateVM.currentEstimate,
+                            pdfData: pdf,
+                            onSigned: { signedData in
+                                if let data = signedData {
+                                    estimateVM.currentEstimate.customerSignatureDate = Date()
+                                    estimateVM.updateSignature(data: data)
+                                }
+                            },
+                            onError: { message in
+                                docuSignError = message
                             }
-                        },
-                        onError: { message in
-                            docuSignError = message
-                        }
-                    )
-                } label: {
-                    Label("Sign with DocuSign", systemImage: "signature")
-                        .frame(maxWidth: .infinity)
+                        )
+                    } label: {
+                        Label("Sign with DocuSign", systemImage: "signature")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.bordered)
                 .alert("DocuSign", isPresented: Binding(
                     get: { docuSignError != nil },
                     set: { if !$0 { docuSignError = nil } }
@@ -1794,11 +1799,12 @@ struct DecisionOptionPageView: View {
                     Button("OK", role: .cancel) { docuSignError = nil }
                 } message: {
                     if let msg = docuSignError {
-                        Text(msg)
+                        Text(msg + (docuSignService.isConfigured ? "" : " Add your Integration Key in Settings > DocuSign."))
                     }
                 }
             }
         }
+        .padding(.vertical, 8)
     }
     
     private var signatureDateText: String {

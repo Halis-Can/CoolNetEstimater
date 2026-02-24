@@ -145,7 +145,7 @@ struct PrintableTotalsComparisonPage: View {
     @AppStorage("tier_best_visible") private var tierBestVisible: Bool = true
     @AppStorage("finance_markup_percent") private var financeMarkupPercent: Double = 0.0
     @AppStorage("finance_rate_percent") private var financeRatePercent: Double = 0.0
-    @AppStorage("finance_term_months") private var financeTermMonths: Int = 12
+    @AppStorage("finance_term_months") private var financeTermMonths: Int = 60
     
     private var visibleTiers: [Tier] {
         [Tier.good, .better, .best].filter { tier in
@@ -253,8 +253,8 @@ struct PrintableTotalsComparisonPage: View {
                         Spacer()
                         Text(formatCurrency(totalWithMarkup)).bold()
                     }
-                    if let monthly = printableMonthlyPayment(total: totalWithMarkup, ratePercent: financeRatePercent, termMonths: financeTermMonths) {
-                        let rateStr = financeRatePercent == 0 ? "0%" : String(format: "%.1f%%", financeRatePercent)
+                    if let monthly = printableMonthlyPayment(total: totalWithMarkup, ratePercent: FinanceTermRates.aprPercent(for: financeTermMonths), termMonths: financeTermMonths) {
+                        let rateStr = String(format: "%.2f%%", FinanceTermRates.aprPercent(for: financeTermMonths))
                         Text("Financing Plan: \(rateStr) for \(financeTermMonths) Months — \(formatCurrency(monthly))/month")
                             .font(.subheadline.bold())
                     }
