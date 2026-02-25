@@ -998,7 +998,7 @@ private struct SystemOptionCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 
                 HStack {
-                    Text("Cash price Total:")
+                    Text("Cash Payment Subtotal:")
                         .font(.subheadline)
                         .fontWeight(.semibold)
                     Spacer()

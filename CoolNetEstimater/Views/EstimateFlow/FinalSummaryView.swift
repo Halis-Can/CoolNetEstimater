@@ -650,12 +650,41 @@ struct FinalSummaryView: View {
                         Spacer()
                         Text(formatCurrency(addOnsSubtotal)).font(.system(size: 10))
                     }
-                    HStack {
-                        Text("Total").bold()
-                        Spacer()
-                        Text(formatCurrency(systemTierDisplayTotal)).bold()
+                    VStack(alignment: .center, spacing: 6) {
+                        Text("Grand Total")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.secondary)
+                        Text(formatCurrency(grandTotalAmountPaid))
+                            .font(.system(size: 18, weight: .bold))
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.blue.opacity(0.12))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.blue.opacity(0.5), lineWidth: 1.5)
+                    )
                     systemTierPaymentOptionRow(paymentOption: paymentOption)
+                    VStack(alignment: .center, spacing: 6) {
+                        Text("Cash Payment Subtotal")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.secondary)
+                        Text(formatCurrency(totalWithAddOns))
+                            .font(.system(size: 18, weight: .bold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.green.opacity(0.12))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.green.opacity(0.5), lineWidth: 1.5)
+                    )
                 } else {
                     Text("No option available").font(.caption).foregroundStyle(.secondary)
                 }
@@ -692,6 +721,22 @@ struct FinalSummaryView: View {
             case .cashCheckZelle: return totalWithAddOns
             case .creditCard: return totalWithAddOns * (1 + creditCardFeePercent / 100.0)
             case .finance: return totalWithMarkup
+            }
+        }
+        
+        /// Grand total the customer actually pays: for finance = total over term (monthly × months), else systemTierDisplayTotal.
+        private var grandTotalAmountPaid: Double {
+            let option = PaymentOption(rawValue: paymentOptionRaw) ?? .cashCheckZelle
+            switch option {
+            case .cashCheckZelle, .creditCard:
+                return systemTierDisplayTotal
+            case .finance:
+                guard let monthly = financeMonthlyPayment(total: totalWithMarkup,
+                                                          ratePercent: FinanceTermRates.aprPercent(for: financeTermMonths),
+                                                          termMonths: financeTermMonths) else {
+                    return totalWithMarkup
+                }
+                return monthly * Double(financeTermMonths)
             }
         }
         
@@ -737,18 +782,19 @@ struct FinalSummaryView: View {
         
         @ViewBuilder
         private func systemTierFinancingBlock(monthlyText: String) -> some View {
+            let fontSize: CGFloat = 10.5
             VStack(alignment: .leading, spacing: 4) {
                 Text("Financing Plan")
-                    .font(.subheadline)
+                    .font(.system(size: fontSize))
                     .foregroundStyle(.secondary)
                 HStack {
                     Spacer()
                     Text(systemTierFinancingInnerText(monthlyText: monthlyText))
-                        .font(.subheadline.bold())
+                        .font(.system(size: fontSize, weight: .bold))
                         .foregroundStyle(Color.primary.opacity(0.9))
                 }
-                .padding(.vertical, 10)
-                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .padding(.horizontal, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color(UIColor.secondarySystemBackground))
@@ -1219,11 +1265,6 @@ struct DecisionOptionPageView: View {
                     .background(Color(UIColor.tertiarySystemFill))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
-                Text("Wells Fargo / Carrier Finance")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
             }
             .padding(20)
             .background(Color(UIColor.secondarySystemGroupedBackground))
