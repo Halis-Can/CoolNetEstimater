@@ -47,6 +47,11 @@ struct SystemSettingsView: View {
                         } label: {
                             Label("Additional Equipment Templates", systemImage: "wrench.and.screwdriver")
                         }
+                        NavigationLink {
+                            CompareView()
+                        } label: {
+                            Label("Compare", systemImage: "snowflake")
+                        }
                     }
                     Section {
                         NavigationLink {
@@ -98,7 +103,7 @@ struct SystemSettingsView: View {
             }
             .frame(maxWidth: .infinity, alignment: .center)
             .padding()
-            .navigationTitle("System Settings")
+            .navigationTitle("Settings")
             .toolbar {
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
                     Menu {

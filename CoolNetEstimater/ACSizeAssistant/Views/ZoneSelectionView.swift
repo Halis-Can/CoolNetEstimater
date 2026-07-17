@@ -17,8 +17,6 @@ struct ZoneSelectionView: View {
     
     var body: some View {
         VStack(spacing: AppTheme.sectionSpacing) {
-            AppLogoHeader(height: AppTheme.logoHeaderHeight)
-            
             CoolCard {
                 ZStack {
                     Group {
@@ -121,7 +119,7 @@ struct ZoneSelectionView: View {
             Spacer()
         }
         .padding()
-        .background(CoolGradientBackground())
+        .background(Color.clear)
         .onAppear {
             if viewModel.selectedClimateZone == nil {
                 viewModel.selectedClimateZone = .zone1

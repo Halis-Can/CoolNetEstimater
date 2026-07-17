@@ -81,8 +81,7 @@ struct FloorInputView: View {
             }
             .padding()
         }
-        .background(CoolGradientBackground())
-        .navigationTitle("Floors & Loads")
+        .background(Color.clear)
     }
 }
 

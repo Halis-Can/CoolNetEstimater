@@ -48,7 +48,7 @@ struct EstimateListView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(AppTheme.brandBlue)
-                        .accessibilityLabel("New Estimate")
+                        .accessibilityLabel("New Customer")
                     }
                     .padding(.horizontal)
                     
@@ -61,12 +61,12 @@ struct EstimateListView: View {
                     
                     if filteredEstimates.isEmpty {
                         EmptyStateView(
-                            systemImage: selectedTab == .pending ? "doc.badge.plus" : "checkmark.seal",
-                            title: selectedTab == .pending ? "No pending estimates" : "No approved estimates",
+                            systemImage: selectedTab == .pending ? "person.badge.plus" : "checkmark.seal",
+                            title: selectedTab == .pending ? "No pending customers" : "No approved customers",
                             message: selectedTab == .pending
-                                ? "Create a new estimate to get started with a customer proposal."
-                                : "Approved estimates will appear here after a customer signs.",
-                            actionTitle: selectedTab == .pending ? "New Estimate" : nil,
+                                ? "Add a customer to start a new estimate and proposal."
+                                : "Approved customer estimates will appear here after signing.",
+                            actionTitle: selectedTab == .pending ? "New Customer" : nil,
                             action: selectedTab == .pending ? {
                                 estimateVM.createNewEstimate()
                                 startAtSummary = false
@@ -110,7 +110,7 @@ struct EstimateListView: View {
                 }
                 .padding(.top, 8)
             }
-            .navigationTitle("Estimates")
+            .navigationTitle("Customers")
             .navigationDestination(isPresented: $navigateToFlow) {
                 EstimateFlowView(startStep: startAtSummary ? .summary : .customer)
             }

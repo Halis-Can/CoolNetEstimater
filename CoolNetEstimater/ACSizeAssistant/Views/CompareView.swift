@@ -72,39 +72,39 @@ struct CompareView: View {
 	@State private var showZoom: Bool = false
     
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                Picker("Compare", selection: $selection) {
-                    ForEach(Kind.allCases) { k in
-                        Text(k.rawValue).tag(k)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                .padding(.bottom, 12)
-                
-                ScrollView {
-                    VStack(spacing: AppTheme.sectionSpacing) {
-                        ForEach(Tier.allCases) { tier in
-                            CompareTierCard(
-                                kind: selection,
-                                tier: tier,
-                                tierStore: tierStore,
-                                zoomImage: $zoomImage,
-                                showZoom: $showZoom,
-                                firstExistingImageName: { firstExistingImageName(for: $0, tier: $1) }
-                            )
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.bottom, 24)
+        VStack(spacing: 0) {
+            Picker("Compare", selection: $selection) {
+                ForEach(Kind.allCases) { k in
+                    Text(k.rawValue).tag(k)
                 }
             }
-            .padding(.vertical)
-            .background(CoolGradientBackground())
-            .navigationTitle("Compare")
-            .navigationBarTitleDisplayMode(.inline)
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.bottom, 12)
+            
+            ScrollView {
+                VStack(spacing: AppTheme.sectionSpacing) {
+                    ForEach(Tier.allCases) { tier in
+                        CompareTierCard(
+                            kind: selection,
+                            tier: tier,
+                            tierStore: tierStore,
+                            zoomImage: $zoomImage,
+                            showZoom: $showZoom,
+                            firstExistingImageName: { firstExistingImageName(for: $0, tier: $1) }
+                        )
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 24)
+            }
         }
+        .padding(.vertical)
+        .background(CoolGradientBackground())
+        .navigationTitle("Compare")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
 		.fullScreenCover(isPresented: $showZoom) {
 			ZStack {
 				Color.black.ignoresSafeArea()

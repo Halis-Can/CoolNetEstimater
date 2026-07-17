@@ -28,8 +28,7 @@ struct ResultsView: View {
             }
             .padding()
         }
-        .background(CoolGradientBackground())
-        .navigationTitle("Results")
+        .background(Color.clear)
     }
     
 }

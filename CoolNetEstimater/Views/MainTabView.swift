@@ -13,18 +13,18 @@ struct MainTabView: View {
                 .tabItem {
                     Label("AC Size Assistant", systemImage: "thermometer")
                 }
+            
             EstimateListView()
                 .tabItem {
-                    Label("Estimate", systemImage: "doc.text")
+                    Label("Customers", systemImage: "person.2.fill")
                 }
-            CompareView()
-                .tabItem {
-                    Label("Compare", systemImage: "snowflake")
-                }
+            
+            // Settings alone on the far right — icon only
             SystemSettingsView()
                 .tabItem {
-                    Label("Settings", systemImage: "gearshape")
+                    Image(systemName: "gearshape.fill")
                 }
+                .accessibilityLabel("Settings")
         }
         .tint(AppTheme.brandBlue)
         .preferredColorScheme(preferredScheme(settingsVM.themeMode))
