@@ -38,7 +38,7 @@ extension NSImage {
 #endif
 
 struct AppLogoHeader: View {
-    var height: CGFloat = 100
+    var height: CGFloat = AppTheme.logoHeaderHeight
     /// When true, always show the app's default logo (CompanyLogo asset); ignores Settings > Company Information logo.
     var useAppLogoOnly: Bool = false
     @AppStorage("company_logo_data") private var companyLogoData: Data?

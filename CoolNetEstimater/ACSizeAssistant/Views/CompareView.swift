@@ -72,36 +72,39 @@ struct CompareView: View {
 	@State private var showZoom: Bool = false
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Equipment type: AC, Furnace, Heat Pump
-            Picker("Compare", selection: $selection) {
-                ForEach(Kind.allCases) { k in
-                    Text(k.rawValue).tag(k)
-                }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal)
-            .padding(.bottom, 12)
-            
-            ScrollView {
-                VStack(spacing: 16) {
-                    ForEach(Tier.allCases) { tier in
-                        CompareTierCard(
-                            kind: selection,
-                            tier: tier,
-                            tierStore: tierStore,
-                            zoomImage: $zoomImage,
-                            showZoom: $showZoom,
-                            firstExistingImageName: { firstExistingImageName(for: $0, tier: $1) }
-                        )
+        NavigationStack {
+            VStack(spacing: 0) {
+                Picker("Compare", selection: $selection) {
+                    ForEach(Kind.allCases) { k in
+                        Text(k.rawValue).tag(k)
                     }
                 }
+                .pickerStyle(.segmented)
                 .padding(.horizontal)
-                .padding(.bottom, 24)
+                .padding(.bottom, 12)
+                
+                ScrollView {
+                    VStack(spacing: AppTheme.sectionSpacing) {
+                        ForEach(Tier.allCases) { tier in
+                            CompareTierCard(
+                                kind: selection,
+                                tier: tier,
+                                tierStore: tierStore,
+                                zoomImage: $zoomImage,
+                                showZoom: $showZoom,
+                                firstExistingImageName: { firstExistingImageName(for: $0, tier: $1) }
+                            )
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom, 24)
+                }
             }
+            .padding(.vertical)
+            .background(CoolGradientBackground())
+            .navigationTitle("Compare")
+            .navigationBarTitleDisplayMode(.inline)
         }
-        .padding(.vertical)
-        .background(Color(.systemGroupedBackground))
 		.fullScreenCover(isPresented: $showZoom) {
 			ZStack {
 				Color.black.ignoresSafeArea()
@@ -172,7 +175,7 @@ private struct CompareTierCard: View {
     private var linkStr: String { tierStore.link(category: category, tier: tier) }
     
     var body: some View {
-        Card {
+        CoolCard {
             VStack(alignment: .leading, spacing: 12) {
                 Text("\(kind.rawValue) — \(tier.displayName)")
                     .font(.headline)
@@ -317,23 +320,8 @@ private struct CompareTierCard: View {
     }
 }
 
-private struct Card<Content: View>: View {
-    @ViewBuilder let content: () -> Content
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            content()
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 6)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14).stroke(Color(.separator), lineWidth: 1)
-        )
-    }
-}
-
+#if DEBUG
 #Preview {
     CompareView()
 }
+#endif

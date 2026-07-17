@@ -10,7 +10,6 @@ struct EstimateListView: View {
     @EnvironmentObject var settingsVM: SettingsViewModel
     @State private var searchText: String = ""
     @State private var navigateToFlow: Bool = false
-    @State private var selectedEstimateId: UUID?
     @State private var startAtSummary: Bool = false
     @State private var selectedTab: EstimateTab = .pending
     
@@ -21,107 +20,141 @@ struct EstimateListView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
-                HStack {
-                    TextField("Search by customer name", text: $searchText)
-                        .textFieldStyle(.roundedBorder)
-                    Button {
-                        estimateVM.createNewEstimate()
-                        startAtSummary = false
-                        navigateToFlow = true
-                    } label: {
-                        Label("New Estimate", systemImage: "plus.circle.fill")
-                    }.buttonStyle(.borderedProminent)
-                }
-                .padding(.horizontal)
+            ZStack {
+                CoolGradientBackground()
                 
-                // Tab selector
-                Picker("Status", selection: $selectedTab) {
-                    Text("Pending").tag(EstimateTab.pending)
-                    Text("Approved").tag(EstimateTab.approved)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                
-                List {
-                    ForEach(filteredEstimates) { est in
-                        HStack {
-                            // Tap on name goes directly to Final Summary
-                            Button {
-                                estimateVM.loadEstimate(est)
-                                startAtSummary = true
-                                navigateToFlow = true
-                            } label: {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    HStack {
-                                        Text(est.customerName.isEmpty ? "(No Name)" : est.customerName)
-                                            .font(.headline)
-                                        Spacer()
-                                        // Status badge
-                                        HStack(spacing: 4) {
-                                            Image(systemName: est.status == .approved ? "checkmark.circle.fill" : "clock.fill")
-                                                .font(.caption)
-                                                .foregroundStyle(est.status == .approved ? .green : .orange)
-                                            Text(est.status.rawValue)
-                                                .font(.caption2)
-                                                .foregroundStyle(est.status == .approved ? .green : .orange)
-                                        }
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(
-                                            Capsule()
-                                                .fill((est.status == .approved ? Color.green : Color.orange).opacity(0.15))
-                                        )
-                                    }
-                                    Text("\(est.estimateNumber.isEmpty ? "—" : est.estimateNumber) • \(est.estimateDate.formatted(date: .abbreviated, time: .omitted))")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            Spacer()
-                            // Delete button
-                            Button(role: .destructive) {
-                                estimateVM.deleteEstimate(id: est.id)
-                            } label: {
-                                Image(systemName: "trash")
-                                    .foregroundStyle(.red)
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.trailing, 8)
-                            // Tap chevron opens at start
-                            Button {
-                                estimateVM.loadEstimate(est)
+                VStack(spacing: 12) {
+                    HStack(spacing: 10) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundStyle(.secondary)
+                            TextField("Search customers", text: $searchText)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppTheme.compactCornerRadius)
+                                .fill(Color.appCardBackground.opacity(0.92))
+                        )
+                        
+                        Button {
+                            estimateVM.createNewEstimate()
+                            startAtSummary = false
+                            navigateToFlow = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.headline.weight(.semibold))
+                                .frame(width: 44, height: 44)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(AppTheme.brandBlue)
+                        .accessibilityLabel("New Estimate")
+                    }
+                    .padding(.horizontal)
+                    
+                    Picker("Status", selection: $selectedTab) {
+                        Text("Pending").tag(EstimateTab.pending)
+                        Text("Approved").tag(EstimateTab.approved)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                    
+                    if filteredEstimates.isEmpty {
+                        EmptyStateView(
+                            systemImage: selectedTab == .pending ? "doc.badge.plus" : "checkmark.seal",
+                            title: selectedTab == .pending ? "No pending estimates" : "No approved estimates",
+                            message: selectedTab == .pending
+                                ? "Create a new estimate to get started with a customer proposal."
+                                : "Approved estimates will appear here after a customer signs.",
+                            actionTitle: selectedTab == .pending ? "New Estimate" : nil,
+                            action: selectedTab == .pending ? {
+                                estimateVM.createNewEstimate()
                                 startAtSummary = false
                                 navigateToFlow = true
-                            } label: {
-                                Image(systemName: "chevron.right")
-                                    .foregroundStyle(.secondary)
+                            } : nil
+                        )
+                    } else {
+                        List {
+                            ForEach(filteredEstimates) { est in
+                                estimateRow(est)
+                                    .listRowBackground(Color.appCardBackground.opacity(0.92))
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                        Button(role: .destructive) {
+                                            estimateVM.deleteEstimate(id: est.id)
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
+                                    }
+                                    .contextMenu {
+                                        Button {
+                                            openEstimate(est, atSummary: false)
+                                        } label: {
+                                            Label("Open Estimate", systemImage: "doc.text")
+                                        }
+                                        Button {
+                                            openEstimate(est, atSummary: true)
+                                        } label: {
+                                            Label("Open Final Summary", systemImage: "list.bullet.rectangle")
+                                        }
+                                        Button(role: .destructive) {
+                                            estimateVM.deleteEstimate(id: est.id)
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
+                                    }
                             }
-                            .buttonStyle(.plain)
                         }
-                        .swipeActions {
-                            Button(role: .destructive) {
-                                estimateVM.deleteEstimate(id: est.id)
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
+                        .listStyle(.insetGrouped)
+                        .scrollContentBackground(.hidden)
                     }
                 }
-                .listStyle(.insetGrouped)
-                .navigationDestination(isPresented: $navigateToFlow) {
-                    EstimateFlowView(startStep: startAtSummary ? .summary : .customer)
-                }
+                .padding(.top, 8)
             }
-            .padding(.top)
             .navigationTitle("Estimates")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
+            .navigationDestination(isPresented: $navigateToFlow) {
+                EstimateFlowView(startStep: startAtSummary ? .summary : .customer)
             }
         }
+    }
+    
+    @ViewBuilder
+    private func estimateRow(_ est: Estimate) -> some View {
+        Button {
+            openEstimate(est, atSummary: false)
+        } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(est.customerName.isEmpty ? "(No Name)" : est.customerName)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        StatusBadge(status: est.status)
+                    }
+                    Text("\(est.estimateNumber.isEmpty ? "—" : est.estimateNumber) · \(est.estimateDate.formatted(date: .abbreviated, time: .omitted))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if est.grandTotal > 0 {
+                        Text(formatCurrency(est.grandTotal))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppTheme.brandBlue)
+                    }
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private func openEstimate(_ est: Estimate, atSummary: Bool) {
+        estimateVM.loadEstimate(est)
+        startAtSummary = atSummary
+        navigateToFlow = true
     }
     
     private var filteredEstimates: [Estimate] {
@@ -129,15 +162,15 @@ struct EstimateListView: View {
         let statusFilter: EstimateStatus = selectedTab == .pending ? .pending : .approved
         return estimateVM.estimates
             .filter { $0.status == statusFilter }
-            .sorted { $0.customerName.localizedCaseInsensitiveCompare($1.customerName) == .orderedAscending }
+            .sorted { $0.estimateDate > $1.estimateDate }
             .filter { key.isEmpty || $0.customerName.lowercased().contains(key) }
     }
 }
 
+#if DEBUG
 #Preview {
     EstimateListView()
         .environmentObject(EstimateViewModel())
         .environmentObject(SettingsViewModel())
 }
-
-
+#endif

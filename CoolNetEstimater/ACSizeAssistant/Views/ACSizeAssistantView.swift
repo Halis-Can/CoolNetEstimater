@@ -65,8 +65,9 @@ struct ACSizeAssistantView: View {
                             .navigationTitle(Step.results.title)
                     }
                 }
-                .background(Color(.systemGroupedBackground))
+                .background(CoolGradientBackground())
             }
+            .tint(AppTheme.brandBlue)
         } else {
             // Fallback for iOS 15
             NavigationView {
@@ -85,6 +86,7 @@ struct ACSizeAssistantView: View {
                 }
                 .navigationTitle("Assistant")
             }
+            .tint(AppTheme.brandBlue)
         }
     }
 }

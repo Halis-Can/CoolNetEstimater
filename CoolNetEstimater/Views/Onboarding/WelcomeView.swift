@@ -12,28 +12,26 @@ struct WelcomeView: View {
         ZStack {
             CoolGradientBackground()
             
-            VStack(spacing: 28) {
-                AppLogoHeader(height: 640, useAppLogoOnly: true)
+            VStack(spacing: 0) {
+                Spacer(minLength: 24)
                 
-                Text("Welcome")
-                    .font(.title.bold())
-                    .foregroundStyle(.secondary)
+                AppLogoHeader(height: AppTheme.logoWelcomeHeight, useAppLogoOnly: true)
+                    .padding(.bottom, 20)
                 
                 Text("Cool Net Estimater")
-                    .font(.custom("Snell Roundhand", size: 44))
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.primary)
-                    .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
                     .padding(.horizontal)
                 
-                Text("To create a new estimate, please tap the Continue button.")
-                    .font(.system(size: 22, weight: .medium, design: .serif))
-                    .italic()
+                Text("HVAC estimates, sizing, and Good–Better–Best proposals — ready for the job site.")
+                    .font(.body)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
-                    .lineSpacing(6)
-                    .padding(.horizontal, 32)
-                    .padding(.top, 8)
+                    .padding(.horizontal, 36)
+                    .padding(.top, 12)
+                
+                Spacer(minLength: 32)
                 
                 Button(action: {
                     UserDefaults.standard.set(true, forKey: "has_completed_onboarding")
@@ -41,17 +39,23 @@ struct WelcomeView: View {
                 }) {
                     Text("Continue")
                         .font(.headline)
-                        .frame(maxWidth: 260)
+                        .frame(maxWidth: 280)
+                        .padding(.vertical, 4)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.blue)
-                .padding(.top, 8)
+                .tint(AppTheme.brandBlue)
+                .controlSize(.large)
+                .padding(.bottom, 48)
             }
-            .frame(maxWidth: 900)
+            .frame(maxWidth: AppTheme.contentMaxWidth)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding()
         }
     }
 }
 
-
+#if DEBUG
+#Preview {
+    WelcomeView(onContinue: {})
+}
+#endif

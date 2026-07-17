@@ -26,6 +26,7 @@ struct MainTabView: View {
                     Label("Settings", systemImage: "gearshape")
                 }
         }
+        .tint(AppTheme.brandBlue)
         .preferredColorScheme(preferredScheme(settingsVM.themeMode))
         .background(LiveSyncBridge())
     }

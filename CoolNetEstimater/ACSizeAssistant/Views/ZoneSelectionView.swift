@@ -16,12 +16,10 @@ struct ZoneSelectionView: View {
     var onNext: (() -> Void)? = nil
     
     var body: some View {
-        VStack(spacing: 16) {
-            // Header centered
-            AppLogoHeader(height: 80)
+        VStack(spacing: AppTheme.sectionSpacing) {
+            AppLogoHeader(height: AppTheme.logoHeaderHeight)
             
-            // Visual: Climate zone map header (drop an asset named "ClimateZonesMap")
-            Card {
+            CoolCard {
                 ZStack {
                     Group {
                         #if os(iOS)
@@ -32,9 +30,14 @@ struct ZoneSelectionView: View {
                                 .frame(maxHeight: 220)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                         } else {
-                            // Fallback placeholder until the image asset is added
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(LinearGradient(colors: [.blue.opacity(0.35), .orange.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .fill(
+                                    LinearGradient(
+                                        colors: [AppTheme.brandBlue.opacity(0.45), AppTheme.brandTeal.opacity(0.4)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
                                 .frame(height: 180)
                                 .overlay(
                                     VStack(spacing: 8) {
@@ -55,9 +58,14 @@ struct ZoneSelectionView: View {
                                 .frame(maxHeight: 220)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                         } else {
-                            // Fallback placeholder until the image asset is added
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(LinearGradient(colors: [.blue.opacity(0.35), .orange.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .fill(
+                                    LinearGradient(
+                                        colors: [AppTheme.brandBlue.opacity(0.45), AppTheme.brandTeal.opacity(0.4)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
                                 .frame(height: 180)
                                 .overlay(
                                     VStack(spacing: 8) {
@@ -75,21 +83,20 @@ struct ZoneSelectionView: View {
                 }
             }
             
-            Card {
+            CoolCard {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("1. Climate Zone").font(.headline)
-                    HStack {
-                        Picker("Zone", selection: Binding(get: {
-                            viewModel.selectedClimateZone ?? .zone1
-                        }, set: { newVal in
-                            viewModel.selectedClimateZone = newVal
-                        })) {
-                            ForEach(ClimateZone.allCases) { z in
-                                Text(z.title).tag(z)
-                            }
+                    Picker("Zone", selection: Binding(get: {
+                        viewModel.selectedClimateZone ?? .zone1
+                    }, set: { newVal in
+                        viewModel.selectedClimateZone = newVal
+                    })) {
+                        ForEach(ClimateZone.allCases) { z in
+                            Text(z.title).tag(z)
                         }
-                        .pickerStyle(.segmented)
                     }
+                    .pickerStyle(.segmented)
+                    
                     VStack(alignment: .leading, spacing: 6) {
                         Text("ZIP Code (optional)").font(.subheadline).foregroundStyle(.secondary)
                         TextField("e.g. 30040", text: $viewModel.zipCode)
@@ -101,55 +108,25 @@ struct ZoneSelectionView: View {
                 }
             }
             
-            // Show "Next" for Zone 1, "Save" for Zone 2-5
-            if viewModel.selectedClimateZone == .zone1 {
-                Button {
-                    if let onNext {
-                        onNext()
-                    }
-                } label: {
-                    Text("Next")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-            } else if let zone = viewModel.selectedClimateZone, [.zone2, .zone3, .zone4, .zone5].contains(zone) {
-                Button {
-                    if let onNext {
-                        onNext()
-                    }
-                } label: {
-                    Text("Save")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
+            Button {
+                onNext?()
+            } label: {
+                Text("Continue")
+                    .frame(maxWidth: .infinity)
             }
+            .buttonStyle(.borderedProminent)
+            .tint(AppTheme.brandBlue)
+            .disabled(viewModel.selectedClimateZone == nil)
             
             Spacer()
         }
         .padding()
-        .background(Color(.systemGroupedBackground))
+        .background(CoolGradientBackground())
         .onAppear {
-            // Ensure default is Zone 1 if not set
             if viewModel.selectedClimateZone == nil {
                 viewModel.selectedClimateZone = .zone1
             }
         }
-    }
-}
-
-private struct Card<Content: View>: View {
-    @ViewBuilder let content: () -> Content
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            content()
-        }
-        .padding(16)
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 6)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14).stroke(Color(.separator), lineWidth: 1)
-        )
     }
 }
 

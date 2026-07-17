@@ -28,7 +28,7 @@ struct ResultsView: View {
             }
             .padding()
         }
-        .background(Color(.systemGroupedBackground))
+        .background(CoolGradientBackground())
         .navigationTitle("Results")
     }
     
@@ -117,12 +117,12 @@ private struct FloorResultCard: View {
         }
         .padding(20)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemBackground))
-                .shadow(color: Color.black.opacity(0.08), radius: 10, x: 0, y: 4)
+            RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius)
+                .fill(Color.appCardBackground)
+                .shadow(color: AppTheme.cardShadow, radius: AppTheme.cardShadowRadius, x: 0, y: AppTheme.cardShadowY)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius)
                 .stroke(
                     LinearGradient(
                         colors: [colorForFloorType(result.floorType).opacity(0.3), colorForFloorType(result.floorType).opacity(0.1)],
@@ -137,11 +137,11 @@ private struct FloorResultCard: View {
     private func colorForFloorType(_ type: FloorType) -> Color {
         switch type {
         case .main:
-            return Color.blue
+            return AppTheme.brandBlue
         case .upper:
-            return Color.orange
+            return AppTheme.brandTeal
         case .basement:
-            return Color.purple
+            return AppTheme.brandIndigo
         }
     }
     

@@ -85,7 +85,7 @@ struct FinalSummaryView: View {
                 }
             }
         }
-        .background(Color(.systemBackground))
+        .background(CoolGradientBackground())
         .id(companyInfoId) // Force refresh when company info changes
         .onAppear {
             estimateVM.attachTemplates(settingsVM.addOnTemplates)
@@ -127,6 +127,7 @@ struct FinalSummaryView: View {
             .padding(.vertical, 16)
         }
         .buttonStyle(.borderedProminent)
+        .tint(AppTheme.brandBlue)
         .disabled(selectedTierForNext == nil)
         .opacity(selectedTierForNext != nil ? 1 : 0.6)
         .frame(maxWidth: 400)
@@ -500,9 +501,9 @@ struct FinalSummaryView: View {
         
         private func pastelColor(for tier: Tier) -> Color {
             switch tier {
-            case .good: return Color.blue
-            case .better: return Color.purple
-            case .best: return Color.pink
+            case .good: return AppTheme.brandBlue
+            case .better: return AppTheme.brandTeal
+            case .best: return AppTheme.brandIndigo
             }
         }
     }
@@ -517,9 +518,9 @@ struct FinalSummaryView: View {
         
         private func accentColor(for tier: Tier) -> Color {
             switch tier {
-            case .good: return .blue
-            case .better: return .purple
-            case .best: return .pink
+            case .good: return AppTheme.brandBlue
+            case .better: return AppTheme.brandTeal
+            case .best: return AppTheme.brandIndigo
             }
         }
         
@@ -575,9 +576,9 @@ struct FinalSummaryView: View {
         
         private func pastelColorForIndex(_ idx: Int) -> Color {
             switch idx % 3 {
-            case 0: return Color.blue
-            case 1: return Color.green
-            default: return Color.orange
+            case 0: return AppTheme.brandBlue
+            case 1: return AppTheme.brandTeal
+            default: return AppTheme.brandIndigo
             }
         }
     }
@@ -1195,21 +1196,21 @@ struct DecisionOptionPageView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.blue.opacity(0.12))
+                        RoundedRectangle(cornerRadius: AppTheme.compactCornerRadius)
+                            .fill(AppTheme.brandBlue.opacity(0.12))
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.blue.opacity(0.5), lineWidth: 1.5)
+                        RoundedRectangle(cornerRadius: AppTheme.compactCornerRadius)
+                            .stroke(AppTheme.brandBlue.opacity(0.45), lineWidth: 1.5)
                     )
             }
 
             if paymentOption == .finance {
                 HStack(alignment: .center) {
                     Text("Financing Plan / \(financeTermMonths) Months")
-                        .font(.title2)
+                        .font(.title3)
                         .fontWeight(.semibold)
-                        .foregroundStyle(Color.purple)
+                        .foregroundStyle(AppTheme.brandIndigo)
                     Spacer()
                     Text("\(selectionMonthlyPaymentText)/mo")
                         .font(.title2)
@@ -1219,12 +1220,12 @@ struct DecisionOptionPageView: View {
                 .padding(.vertical, 14)
                 .padding(.horizontal, 16)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.purple.opacity(0.12))
+                    RoundedRectangle(cornerRadius: AppTheme.compactCornerRadius)
+                        .fill(AppTheme.brandIndigo.opacity(0.10))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.purple.opacity(0.5), lineWidth: 2)
+                    RoundedRectangle(cornerRadius: AppTheme.compactCornerRadius)
+                        .stroke(AppTheme.brandIndigo.opacity(0.4), lineWidth: 1.5)
                 )
                 .padding(.top, 4)
             }
@@ -1244,8 +1245,8 @@ struct DecisionOptionPageView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.blue.opacity(0.08)))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.blue.opacity(0.4), lineWidth: 2))
+        .background(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius).fill(AppTheme.brandTeal.opacity(0.08)))
+        .overlay(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius).stroke(AppTheme.brandTeal.opacity(0.4), lineWidth: 1.5))
     }
 
     private func cashDiscountAmount(paymentOption: PaymentOption) -> Double {
@@ -1261,7 +1262,7 @@ struct DecisionOptionPageView: View {
             HStack(spacing: 8) {
                 Image(systemName: "banknote.fill")
                     .font(.title2)
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(AppTheme.brandTeal)
                 Text("Cash Discount")
                     .font(.headline)
                     .fontWeight(.semibold)
@@ -1300,7 +1301,7 @@ struct DecisionOptionPageView: View {
     private func cashPaymentOptionBoxFinanceContent(discountAmount: Double, financedGrandTotal: Double) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Divider()
-                .background(Color.blue)
+                .background(AppTheme.brandTeal)
                 .padding(.vertical, 4)
             HStack(alignment: .center) {
                 Text("Cash price (if you choose Cash Discount):")
@@ -1315,12 +1316,12 @@ struct DecisionOptionPageView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.blue.opacity(0.12))
+                        RoundedRectangle(cornerRadius: AppTheme.compactCornerRadius)
+                            .fill(AppTheme.brandTeal.opacity(0.12))
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.blue.opacity(0.5), lineWidth: 1.5)
+                        RoundedRectangle(cornerRadius: AppTheme.compactCornerRadius)
+                            .stroke(AppTheme.brandTeal.opacity(0.45), lineWidth: 1.5)
                     )
             }
         }
@@ -1422,7 +1423,7 @@ struct DecisionOptionPageView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(CoolGradientBackground())
             .navigationTitle("Your Selection")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1964,7 +1965,7 @@ struct ThankYouNextStepsView: View {
                 }
                 .padding(24)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(CoolGradientBackground())
             .navigationTitle("You're All Set")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

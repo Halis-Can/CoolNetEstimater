@@ -23,9 +23,9 @@ struct SystemSettingsView: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 16) {
-                AppLogoHeader()
+                AppLogoHeader(height: AppTheme.logoHeaderHeight)
                 List {
                     Section {
                         NavigationLink {

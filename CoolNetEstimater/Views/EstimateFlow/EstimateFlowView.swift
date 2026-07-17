@@ -33,6 +33,10 @@ struct EstimateFlowView: View {
     }
     @State private var customerSaved: Bool = false
     
+    private var stepTitles: [String] {
+        Step.allCases.map(\.title)
+    }
+    
     var body: some View {
         NavigationSplitView {
             // Sidebar: Customer info lives here consistently
@@ -43,31 +47,39 @@ struct EstimateFlowView: View {
                 switch step {
                 case .customer:
                     CenteredScreen {
-                        AppLogoHeader()
-                        VStack(alignment: .center, spacing: 12) {
-                            Text("Please enter customer information on the left, then tap Save.")
-                                .font(.headline)
-                                .multilineTextAlignment(.center)
-                                .frame(maxWidth: .infinity)
-                            Button("Next") { goNext() }
-                                .disabled(!customerSaved)
+                        StepProgressBar(current: step.rawValue, total: Step.allCases.count, titles: stepTitles)
+                        CoolCard {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Customer information")
+                                    .font(.headline)
+                                Text("Enter the customer details in the sidebar, tap Save, then continue.")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Button {
+                                    goNext()
+                                } label: {
+                                    Text("Continue to Systems")
+                                        .frame(maxWidth: .infinity)
+                                }
                                 .buttonStyle(.borderedProminent)
+                                .tint(AppTheme.brandBlue)
+                                .disabled(!customerSaved)
+                            }
                         }
-                        .frame(maxWidth: .infinity, alignment: .center)
                     }
                 case .systems:
                     CenteredScreen {
-                        AppLogoHeader()
+                        StepProgressBar(current: step.rawValue, total: Step.allCases.count, titles: stepTitles)
                         SystemsSetupScreen(onChange: handleSystemMetaChange, next: goNext, back: goBack)
                     }
                 case .options:
                     CenteredScreen {
-                        AppLogoHeader()
+                        StepProgressBar(current: step.rawValue, total: Step.allCases.count, titles: stepTitles)
                         SystemOptionsScreen(next: goNext, back: goBack)
                     }
                 case .addons:
                     CenteredScreen {
-                        AppLogoHeader()
+                        StepProgressBar(current: step.rawValue, total: Step.allCases.count, titles: stepTitles)
                         AdditionalEquipmentScreen(next: goNext, back: goBack)
                     }
                 case .summary:
@@ -76,7 +88,7 @@ struct EstimateFlowView: View {
                     }
                 }
             }
-            .navigationTitle(step == .summary ? "" : step.title)
+            .navigationTitle(step == .summary ? "Final Summary" : step.title)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     if step != .customer {
@@ -87,16 +99,22 @@ struct EstimateFlowView: View {
                     if step != .summary {
                         Button("Next") { goNext() }
                             .disabled(step == .customer && !customerSaved)
+                            .fontWeight(.semibold)
                     }
                 }
             }
         }
         .background(CoolGradientBackground())
+        .tint(AppTheme.brandBlue)
         .onAppear {
             if estimateVM.currentEstimate.systems.isEmpty {
                 estimateVM.ensureSystemCount(1, settingsVM: settingsVM)
             }
             estimateVM.attachTemplates(settingsVM.addOnTemplates)
+            // Returning to an estimate with a name should not block Next
+            if !estimateVM.currentEstimate.customerName.trimmingCharacters(in: .whitespaces).isEmpty {
+                customerSaved = true
+            }
         }
     }
     
@@ -124,7 +142,7 @@ private struct SidebarCustomerForm: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            AppLogoHeader()
+            AppLogoHeader(height: AppTheme.logoHeaderHeight)
             Form {
                 Section("Customer") {
                     LabeledContent("Name:") {
@@ -157,6 +175,7 @@ private struct SidebarCustomerForm: View {
                             Label("Save", systemImage: "checkmark.circle.fill")
                         }
                         .buttonStyle(.borderedProminent)
+                        .tint(AppTheme.brandBlue)
                         .disabled(!isEditing || estimateVM.currentEstimate.customerName.trimmingCharacters(in: .whitespaces).isEmpty)
                         
                         Button {
@@ -174,7 +193,12 @@ private struct SidebarCustomerForm: View {
         .padding([.horizontal, .top], 12)
         .background(CoolGradientBackground())
         .onAppear {
-            isEditing = !saved
+            if !estimateVM.currentEstimate.customerName.trimmingCharacters(in: .whitespaces).isEmpty {
+                saved = true
+                isEditing = false
+            } else {
+                isEditing = !saved
+            }
         }
     }
     
@@ -198,42 +222,6 @@ private struct CenteredScreen<Content: View>: View {
         .frame(maxWidth: .infinity, alignment: .center)
         .padding(.horizontal)
         .padding(.top, 16)
-    }
-}
-
-// MARK: - Customer Info
-
-private struct CustomerInfoScreen: View {
-    @EnvironmentObject var estimateVM: EstimateViewModel
-    let next: () -> Void
-    
-    var body: some View {
-        Form {
-            Section("Customer") {
-                TextField("Customer Name", text: binding(\.customerName))
-                TextField("Address", text: binding(\.address))
-                TextField("Phone", text: binding(\.phone))
-                    .keyboardType(.phonePad)
-                TextField("Email", text: binding(\.email))
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.emailAddress)
-            }
-            Section {
-                Button {
-                    next()
-                } label: {
-                    Text("Start System Selection")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        }
-        .scrollContentBackground(.hidden)
-    }
-    
-    private func binding<T>(_ keyPath: WritableKeyPath<Estimate, T>) -> Binding<T> {
-        Binding(get: { estimateVM.currentEstimate[keyPath: keyPath] },
-                set: { estimateVM.currentEstimate[keyPath: keyPath] = $0 })
     }
 }
 
@@ -416,20 +404,29 @@ private struct SystemsSetupScreen: View {
             }
             
             Section {
-                HStack {
-                    Button("Back") { back() }
-                    Spacer()
-                    Button("Next") { next() }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(!allSystemsSaved)
+                Button {
+                    next()
+                } label: {
+                    Text("Continue")
+                        .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.brandBlue)
+                .disabled(!allSystemsSaved)
             }
         }
         .scrollContentBackground(.hidden)
         .onAppear {
             systemCount = max(1, min(3, estimateVM.currentEstimate.systems.count))
-            editingIds = Set(estimateVM.currentEstimate.systems.map { $0.id })
-            savedIds = []
+            // Existing systems are already configured — don't force re-save
+            let existing = Set(estimateVM.currentEstimate.systems.map { $0.id })
+            if estimateVM.currentEstimate.systems.allSatisfy({ !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }) {
+                savedIds = existing
+                editingIds = []
+            } else {
+                editingIds = existing
+                savedIds = []
+            }
         }
     }
     
@@ -487,11 +484,14 @@ private struct SystemOptionsScreen: View {
                     }
                     .padding(.horizontal)
                 }
-                HStack {
-                    Button("Back") { back() }
-                    Spacer()
-                    Button("Next") { next() }.buttonStyle(.borderedProminent)
+                Button {
+                    next()
+                } label: {
+                    Text("Continue")
+                        .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.brandBlue)
                 .padding()
             }
         }
@@ -506,14 +506,13 @@ private struct OptionEditableRow: View {
     @EnvironmentObject var estimateVM: EstimateViewModel
     let option: SystemOption
     let systemId: UUID
-    @State private var showToCustomer: Bool = true
     
     private var system: EstimateSystem? {
         estimateVM.currentEstimate.systems.first { $0.id == systemId }
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             TierOptionPhotoView(
                 tier: option.tier,
                 height: 100,
@@ -521,7 +520,8 @@ private struct OptionEditableRow: View {
                 equipmentCategory: system?.equipmentType.tierPhotoCategory,
                 showInfoAndLink: true
             )
-                .padding(.bottom, 4)
+            .padding(.bottom, 2)
+            
             HStack {
                 Text(option.tier.displayName).font(.headline)
                 Spacer()
@@ -530,16 +530,23 @@ private struct OptionEditableRow: View {
                     set: { estimateVM.setOptionVisibility(systemId: systemId, optionId: option.id, showToCustomer: $0) }
                 ))
                 .labelsHidden()
+                .accessibilityLabel("Show to customer")
             }
-            // Price prominently on the left
-            Text(formatCurrency(option.price)).bold()
-            Text("\(option.seer, specifier: "%.0f") SEER • \(option.stage) • \(formatTonnage(option.tonnage))")
+            
+            Text(formatCurrency(option.price))
+                .font(.title3.weight(.bold))
+                .foregroundStyle(AppTheme.brandBlue)
+            
+            Text("\(option.seer, specifier: "%.0f") SEER · \(option.stage) · \(formatTonnage(option.tonnage))")
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
+            
             if let ref = systemReferenceLabel(systemId: systemId) {
                 Text(ref)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            
             if option.outdoorModel != nil || option.indoorModel != nil || option.furnaceModel != nil {
                 VStack(alignment: .leading, spacing: 2) {
                     if let m = option.outdoorModel, !m.isEmpty {
@@ -554,33 +561,45 @@ private struct OptionEditableRow: View {
                 }
                 .foregroundStyle(.secondary)
             }
-            Text(formatCurrency(option.price)).bold()
+            
             if !option.advantages.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(option.advantages.prefix(3), id: \.self) { adv in
                         HStack(spacing: 6) {
-                            Image(systemName: "checkmark.seal")
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundStyle(AppTheme.brandTeal)
                             Text(adv)
                         }
                         .font(.caption)
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, 2)
             }
+            
             if let w = option.warrantyText, !w.isEmpty {
                 Text("Warranty: \(w)").font(.caption).foregroundStyle(.secondary)
             }
+            
             Button(action: { estimateVM.toggleOptionSelection(systemId: systemId, optionId: option.id) }) {
-                Text(option.isSelectedByCustomer ? "Unselect" : "Select")
+                Text(option.isSelectedByCustomer ? "Selected" : "Select")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
+            .tint(option.isSelectedByCustomer ? AppTheme.success : AppTheme.brandBlue)
         }
-        .padding()
+        .padding(AppTheme.cardPadding)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(option.isSelectedByCustomer ? Color.green : Color(UIColor.separator), lineWidth: option.isSelectedByCustomer ? 2 : 1)
+            RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius)
+                .fill(option.isSelectedByCustomer ? AppTheme.success.opacity(0.08) : Color.appCardBackground)
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius)
+                .stroke(
+                    option.isSelectedByCustomer ? AppTheme.success : Color.appSeparator,
+                    lineWidth: option.isSelectedByCustomer ? 2 : 1
+                )
+        )
+        .shadow(color: AppTheme.cardShadow, radius: 6, x: 0, y: 3)
     }
     
     private func systemReferenceLabel(systemId: UUID) -> String? {
@@ -634,11 +653,14 @@ private struct AdditionalEquipmentScreen: View {
                 }
             }
             Section {
-                HStack {
-                    Button("Back") { back() }
-                    Spacer()
-                    Button("Next") { next() }.buttonStyle(.borderedProminent)
+                Button {
+                    next()
+                } label: {
+                    Text("Continue to Summary")
+                        .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.brandBlue)
             }
         }
         .scrollContentBackground(.hidden)
